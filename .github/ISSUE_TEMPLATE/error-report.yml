@@ -1,32 +1,48 @@
-name: 오류 보고
-description: 프로그램이 멈추거나 결과가 이상할 때 씁니다. report.bat 이 만든 zip 을 붙여 주세요.
-title: "[오류] "
+name: 오류·사용 후기
+description: 안 됐을 때도, 됐을 때도 이 양식 하나로 보냅니다. report.bat 이 만든 zip 을 붙여 주세요.
+title: "[후기] "
 labels: ["오류 보고"]
 body:
   - type: markdown
     attributes:
       value: |
-        **성적서 PDF, 보고서 HWP, 그림 파일은 절대 첨부하지 마세요.** report.bat 이 만든 zip 에는 그런 파일이 들어가지 않습니다.
+        **성적서 PDF, 보고서 HWP, 그림 파일은 절대 첨부하지 마세요.** report.bat 이 만든 zip 에는 그런 파일이 들어가지 않습니다. README "처음 쓸 때" 표의 회차 순서대로 해 보고 적어 주세요.
   - type: dropdown
     id: step
     attributes:
-      label: 어느 단계에서 문제가 났나요?
+      label: 몇 회차 / 어느 단계인가요?
       options:
         - 설치 (install.bat)
         - 실행 – 분석 중 (워터마크·표·그래프)
         - 검수 화면 (브라우저)
-        - 반영 (한글이 열린 뒤)
-        - 결과 파일이 이상함
+        - 1회차 – 표 칸 1개 반영
+        - 2회차 – 회로도 1장 반영
+        - 3회차 – 그래프 쪽 1개 반영
+        - 4회차 – 추가되는 그래프 쪽 1개 반영
+        - 5회차 – 전부 승인
         - 잘 모르겠음
+    validations:
+      required: true
+  - type: dropdown
+    id: result
+    attributes:
+      label: 결과
+      options:
+        - 안 됨 (멈추거나 오류)
+        - 됐지만 이상함
+        - 됨
     validations:
       required: true
   - type: textarea
     id: message
     attributes:
       label: 화면에 뜬 메시지
-      description: 검은 창이나 브라우저에 나온 글을 그대로 복사해 붙이세요. 사진도 됩니다.
-    validations:
-      required: true
+      description: 안 됐을 때 검은 창이나 브라우저에 나온 글을 그대로 복사해 붙이세요. 사진도 됩니다. 됐으면 비워도 됩니다.
+  - type: textarea
+    id: seen
+    attributes:
+      label: 한글 결과에서 본 모습
+      description: README 표의 "볼 것" 항목별로 한 줄씩. 예) 그래프 3장 들어감 / 반폭 2장이 두 줄로 내려감 / 가운데 정렬 안 됨. 캡처를 붙여도 됩니다(값은 가려 주세요).
   - type: input
     id: page
     attributes:

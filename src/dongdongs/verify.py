@@ -133,6 +133,8 @@ def compare_hwp(before: dict, after: dict, applied: list[dict]) -> dict:
     picture_changes = {(c["hwp"]["table"], c["hwp"]["row"], c["hwp"]["col"]): c for c in done if c.get("kind") == "replace_picture"}
     page_changes = {c["hwp"]["page_no"]: c for c in done if c.get("kind") == "fill_oscillogram_page"}
     added_pages = {c["hwp"]["page_no"] for c in page_changes.values() if c["hwp"].get("page_to_be_added")}
+    # page numbers of filled pages refer to the "before" document; added pages only exist in "after"
+    filled_changes = {p: c for p, c in page_changes.items() if p not in added_pages}
 
     # drop the frames that were added (and everything nested in them) so the rest lines up
     after_tables = [t for t in after["tables"] if t.get("page_no") not in added_pages]
@@ -145,10 +147,9 @@ def compare_hwp(before: dict, after: dict, applied: list[dict]) -> dict:
             expected_pictures += len(change["pictures"]) - int(change["hwp"].get("existing_pictures") or 0)
     if expected_pictures != len(after_pictures):
         problems.append(f"picture count {len(after_pictures)}, expected {expected_pictures}")
-    page_of_table = {}
+    after_index_of = {a["index"]: b["index"] for a, b in zip(before["tables"], after_tables)}
     unexpected, missing_values, size_changes, picture_problems = [], [], [], []
     for table_a, table_b in zip(before["tables"], after_tables):
-        page_of_table[table_b["index"]] = table_b.get("page_no")
         if (table_a["rows"], table_a["cols"], len(table_a["cells"])) != (table_b["rows"], table_b["cols"], len(table_b["cells"])):
             problems.append(f"table {table_a['index']} structure {table_a['rows']}x{table_a['cols']}/{len(table_a['cells'])} -> {table_b['rows']}x{table_b['cols']}/{len(table_b['cells'])}")
             continue
@@ -161,7 +162,7 @@ def compare_hwp(before: dict, after: dict, applied: list[dict]) -> dict:
                 continue
             if (cell_a["width"], cell_a["height"]) != (cell_b["width"], cell_b["height"]):
                 size_changes.append({"cell": key, "before": [cell_a["width"], cell_a["height"]], "after": [cell_b["width"], cell_b["height"]]})
-            page_change = page_changes.get(table_a.get("page_no")) if table_a.get("depth") == 0 else None
+            page_change = filled_changes.get(table_a.get("page_no")) if table_a.get("depth") == 0 else None
             if page_change and (cell_a["row"], cell_a["col"]) == (page_change["hwp"]["row"], page_change["hwp"]["col"]):
                 if _norm(page_change["after"]) not in _norm(cell_b["text"]):
                     missing_values.append({"cell": key, "expected": page_change["after"], "found": cell_b["text"]})
@@ -182,10 +183,10 @@ def compare_hwp(before: dict, after: dict, applied: list[dict]) -> dict:
     for key, group in pics_a.items():
         table_index = key[0]
         table_before = before["tables"][table_index] if table_index < len(before["tables"]) else {}
-        page_change = page_changes.get(table_before.get("page_no")) if table_before.get("depth") == 0 else None
+        page_change = filled_changes.get(table_before.get("page_no")) if table_before.get("depth") == 0 else None
         if page_change and key[1:] == (page_change["hwp"]["row"], page_change["hwp"]["col"]):
             continue
-        found = pics_b.get(key, [])
+        found = pics_b.get((after_index_of.get(table_index, table_index),) + key[1:], [])
         if key in picture_changes:
             target = picture_changes[key]["target"]
             if len(found) != 1 or not _size_ok((target["width_hwpunit"], target["height_hwpunit"]), (found[0]["width"], found[0]["height"])):
@@ -195,11 +196,10 @@ def compare_hwp(before: dict, after: dict, applied: list[dict]) -> dict:
             continue
         if [(p["width"], p["height"]) for p in group] != [(p["width"], p["height"]) for p in found]:
             picture_problems.append({"cell": key, "before": [[p["width"], p["height"]] for p in group], "after": [[p["width"], p["height"]] for p in found]})
-    for page_no, change in page_changes.items():
-        if page_no in added_pages:
-            continue
-        frame = next((t for t in after["tables"] if t.get("depth") == 0 and t.get("page_no") == page_no), None)
-        found = pics_b.get((frame["index"], change["hwp"]["row"], change["hwp"]["col"]), []) if frame else []
+    for page_no, change in filled_changes.items():
+        # a filled page keeps its "before" table; its "after" index may have shifted past inserted pages
+        frame_index = after_index_of.get(change["hwp"]["table"])
+        found = pics_b.get((frame_index, change["hwp"]["row"], change["hwp"]["col"]), []) if frame_index is not None else []
         planned = [(p["width_hwpunit"], p["height_hwpunit"]) for p in change["pictures"]]
         if len(found) != len(planned) or not all(_size_ok(p, (f["width"], f["height"])) for p, f in zip(planned, found)):
             picture_problems.append({"page": page_no, "expected": planned, "found": [[p["width"], p["height"]] for p in found]})

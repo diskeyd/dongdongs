@@ -73,3 +73,21 @@ def test_full_report_includes_values_and_is_labelled(tmp_path, monkeypatch):
 def test_latest_job_and_redact():
     assert redact_text("GEMINI_API_KEY=abc", {}) == "GEMINI_API_KEY=<redacted>"
     assert latest_job(__import__("pathlib").Path("/nonexistent")) is None
+
+
+def test_report_zip_name_and_summary_never_carry_the_input_name(tmp_path, monkeypatch):
+    job = _fake_job(tmp_path, name="20260913-고객사 Draft")
+    monkeypatch.setattr("dongdongs.support.project_root", lambda start=None: tmp_path)
+    (tmp_path / "logs").mkdir()
+    (tmp_path / "logs" / "run-20260913-110000-init.log").write_text("# argv: init --pdf <file.pdf>\n오류: 고객사 Draft.PDF 없음\n", encoding="utf-8")
+    out = build_report_zip(job, tmp_path / "reports")
+    assert "고객사" not in out.name
+    with zipfile.ZipFile(out) as zf:
+        blob = b"".join(zf.read(n) for n in zf.namelist()).decode("utf-8")
+    assert "고객사" not in blob
+
+
+def test_scrub_argv_hides_file_names():
+    from dongdongs.support import _scrub_argv
+
+    assert _scrub_argv(["init", "--pdf", "C:\\input\\고객사 Draft.PDF", "--hwp", "보고서.hwp", "--job-id", "20260913-1200"]) == ["init", "--pdf", "<file.pdf>", "--hwp", "<file.hwp>", "--job-id", "20260913-1200"]

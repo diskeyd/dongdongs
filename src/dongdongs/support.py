@@ -129,7 +129,14 @@ class _Tee(io.TextIOBase):
 
 
 def _scrub_argv(argv: list[str]) -> list[str]:
-    return [Path(a).name if ("/" in a or "\\" in a) else a for a in argv]
+    """Keep flags and plain words; any path-like argument becomes <file.ext> so no file name is logged."""
+    out = []
+    for a in argv:
+        if "/" in a or "\\" in a or Path(a).suffix.lower() in DATA_SUFFIXES:
+            out.append(f"<file{Path(a).suffix.lower()}>")
+        else:
+            out.append(a)
+    return out
 
 
 def log_directory(job_root: Path | None) -> Path:
@@ -221,8 +228,8 @@ def build_report_zip(job_root: Path | None, out_dir: Path, full: bool = False) -
         manifest = json.loads((job_root / "manifest.json").read_text(encoding="utf-8"))
     names = _placeholders(manifest)
     stamp = dt.datetime.now().strftime("%Y%m%d-%H%M")
-    label = (manifest or {}).get("job_id") or (job_root.name if job_root else "no-job")
-    label = re.sub(r"[^0-9A-Za-z가-힣._-]+", "-", label)[:40]
+    label = redact_text((manifest or {}).get("job_id") or (job_root.name if job_root else "no-job"), names)
+    label = re.sub(r"[^0-9A-Za-z._-]+", "-", label).strip("-")[:40] or "job"
     out = out_dir / f"dongdongs-report-{label}-{stamp}{'-full' if full else ''}.zip"
 
     def add_text(zf: zipfile.ZipFile, arcname: str, text: str) -> None:
@@ -236,7 +243,7 @@ def build_report_zip(job_root: Path | None, out_dir: Path, full: bool = False) -
         zf.writestr(arcname, json.dumps(redact_json(data, names), ensure_ascii=False, indent=1))
 
     with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as zf:
-        zf.writestr("report.txt", report_summary(job_root, manifest, full))
+        zf.writestr("report.txt", redact_text(report_summary(job_root, manifest, full), names))
         env_file = project_root() / ENV_FILE
         if env_file.is_file():
             keys = parse_env_text(env_file.read_text(encoding="utf-8-sig"))

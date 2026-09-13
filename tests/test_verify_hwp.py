@@ -70,3 +70,12 @@ def test_replaced_picture_must_change_data_and_keep_size():
     swapped = _page_inventory(["x"], [[(800, 302)]])
     swapped["pictures"][0]["bindata_id"] = 999
     assert compare_hwp(before, swapped, [change])["passed"]
+
+
+def test_pictures_after_an_inserted_page_are_matched_by_shifted_index():
+    before = _page_inventory(["Osc. A-1", "photo page"], [[], [(800, 300)]])
+    plan = [{"kind": "fill_oscillogram_page", "apply_status": "applied", "after": "Osc. B-2", "hwp": {"table": 0, "page_no": 2, "row": 3, "col": 0, "existing_pictures": 0, "page_to_be_added": True},
+             "pictures": [{"width_hwpunit": 1000, "height_hwpunit": 700}]}]
+    after = _page_inventory(["Osc. A-1", "Osc. B-2", "photo page"], [[], [(1000, 700)], [(800, 300)]])
+    result = compare_hwp(before, after, plan)
+    assert result["passed"], result

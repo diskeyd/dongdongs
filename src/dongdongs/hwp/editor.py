@@ -332,19 +332,18 @@ def apply_changes(original: Path, result_dir: Path, approved: list[dict], visibl
                     editor.goto_cell(change["hwp"]["address"])
                     copies = int(change["hwp"].get("copies_after_anchor") or 0)
                     if copies:
-                        # the anchor page is the last existing graph page; make the missing copies once
-                        needed = copies - len([p for p in added_pages if p < change["hwp"]["page_no"]])
-                        if needed > 0:
-                            editor.copy_current_frame_after_itself(needed)
-                            for offset in range(1, needed + 1):
-                                added_pages.add(change["hwp"]["page_no"] - copies + offset)
-                        _goto_anchor(editor, change)
-                        for _ in range(copies):
-                            editor._run("CloseEx")
-                            if not editor.find_forward(change["anchor"]["text"]):
-                                raise EditorError("copied graph page not found after the anchor")
-                            editor._run("Cancel")
+                        if not added_pages:
+                            # first page to add: make every missing copy now, right after the last graph page
+                            total = max(int(c["hwp"].get("copies_after_anchor") or 0) for c in ordered if c["kind"] == "fill_oscillogram_page")
+                            editor.copy_current_frame_after_itself(total)
+                            _goto_anchor(editor, change)
+                        # copies still carry the old title; renamed ones no longer match, so the first hit is the next unfilled copy
+                        editor._run("CloseEx")
+                        if not editor.find_forward(change["anchor"]["text"]):
+                            raise EditorError("copied graph page not found after the anchor")
+                        editor._run("Cancel")
                         editor.goto_cell(change["hwp"]["address"])
+                        added_pages.add(change["hwp"]["page_no"])
                     pictures = []
                     for pic in change["pictures"]:
                         pictures.append({**pic, "png_path": str((job_root / pic["png"]) if job_root else Path(pic["png"]))})

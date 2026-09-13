@@ -36,6 +36,27 @@ def _ask_file(prompt: str, suffixes: tuple[str, ...], optional: bool = False) ->
         print(f"  파일을 찾지 못했거나 확장자가 {'/'.join(suffixes)} 가 아닙니다. 파일을 이 창에 끌어다 놓고 Enter 를 누르세요.")
 
 
+def _serve_review(job_root: Path, port: int = 8765) -> None:
+    import threading
+    import webbrowser
+
+    from .job import open_job
+    from .review.server import make_server
+
+    server = make_server(open_job(job_root), port=port)
+    host, real_port = server.server_address[:2]
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    url = f"http://{host}:{real_port}/"
+    print(f"  검수 화면 주소: {url}  (자동으로 열리지 않으면 브라우저에 직접 입력)")
+    threading.Timer(0.5, webbrowser.open, args=(url,)).start()
+    try:
+        input("  저장을 마쳤으면 Enter: ")
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
 def _yes(prompt: str) -> bool:
     return input(f"{prompt} [y/N] ").strip().lower() == "y"
 
@@ -46,7 +67,7 @@ def run(argv_main) -> int:
     print("dongdongs 시작 — 질문에 답하면 나머지는 자동으로 진행합니다. 원본 파일은 바꾸지 않습니다.")
     pdf = _ask_file("1) 시험성적서 PDF 파일", (".pdf",))
     hwp = _ask_file("2) 보고서 HWP 파일", (".hwp",), optional=True)
-    default_id = f"{dt.datetime.now():%Y%m%d}-{pdf.stem[:20]}"
+    default_id = f"{dt.datetime.now():%Y%m%d-%H%M}"
     job_id = _ask("3) 작업 이름", default_id)
     work = root / "work"
     if (work / job_id).exists() and any((work / job_id).iterdir()):
@@ -69,8 +90,8 @@ def run(argv_main) -> int:
     if not hwp:
         print(f"\nHWP 를 지정하지 않아 여기서 끝냅니다. 추출 결과: {job}")
         return 0
-    print("\n검수 화면을 엽니다. 브라우저에서 승인·수정 후 [저장] 을 누르고, 이 창으로 돌아와 Ctrl+C 를 누르세요.")
-    argv_main(["review", "--job", job])
+    print("\n검수 화면을 엽니다. 브라우저에서 승인·수정 후 [저장] 을 누르고, 이 창으로 돌아와 Enter 를 누르세요.")
+    _serve_review(Path(job))
     approved = Path(job) / "approved_changes.json"
     if not approved.is_file():
         print("저장된 검수 결과가 없어 반영하지 않습니다. 다시 실행하면 같은 작업을 이어서 검수할 수 있습니다:")

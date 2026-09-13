@@ -423,8 +423,12 @@ def main(argv: list[str] | None = None) -> int:
     try:
         return args.func(args) or 0
     except SystemExit as exc:
-        if log is not None and exc.code not in (0, None) and not isinstance(exc.code, int):
-            log.write_exception(exc)
+        if isinstance(exc.code, str):
+            if log is not None:
+                log.write_exception(exc)
+            print(f"오류: {exc.code}", file=sys.stderr)
+            print("report.bat 을 실행해 zip 을 만들어 보내 주세요.", file=sys.stderr)
+            return 1
         raise
     except KeyboardInterrupt:
         print("\n중단했습니다.")

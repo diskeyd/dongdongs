@@ -402,11 +402,6 @@ def fit_picture(bbox, box_width_mm: float, box_height_mm: float, scale: float | 
 SMALL_FILL_RATIO = 0.5
 
 
-def _text_hits(inventory: dict, text: str) -> int:
-    """How often a forward text search meets ``text`` in the document (the editor finds anchors this way)."""
-    return sum(para["text"].count(text) for para in inventory["paragraphs"]) if text else 0
-
-
 def _graph_rows(regions: list[dict]) -> list[list[dict]]:
     rows: list[list[dict]] = []
     for region in sorted(regions, key=lambda r: (r["bbox"][1], r["bbox"][0])):
@@ -457,10 +452,12 @@ def plan_oscillogram_pages(regions: list[dict], inventory: dict, cfg: dict, wate
     changes = []
     last = hwp_pages[-1] if hwp_pages else template
     anchor_page = max(pages) if template else last["page_no"]
-    duplicated = {p["title"] for p in hwp_pages if _text_hits(inventory, p["title"]) > 1}
+    # two graph pages with the same title: the editor groups copies and finds anchors by title, so it could edit the wrong one
+    titles = [p["title"] for p in oscillogram_pages(inventory, title_pattern.pattern)]
+    duplicated = {t for t in titles if titles.count(t) > 1}
     if duplicated:
         warnings.append(
-            f"graph page titles {sorted(duplicated)} appear more than once in the HWP, so the pages cannot be told apart; "
+            f"graph pages share the titles {sorted(duplicated)} in the HWP, so they cannot be told apart; "
             "give each graph page a unique title in Hancom and run again (candidates blocked)"
         )
     crowded = sorted({p["page_no"] for p in hwp_pages if p.get("other_lines")})

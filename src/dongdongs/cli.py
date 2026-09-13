@@ -48,8 +48,7 @@ def _rules(job: Job, args) -> tuple[str, dict]:
     config = load_config(Path(args.config) if getattr(args, "config", None) else None)
     name = getattr(args, "institution", None) or job.manifest().get("institution") or detect_institution(job.pdf, config)
     if not name:
-        # an institution without rules still reaches review: nothing is deleted from the PDF, sections are chosen by hand
-        print("경고: 규칙이 등록된 시험 기관이 아닙니다. 워터마크는 지우지 않고, 보고서 구역은 직접 고릅니다.")
+        # an institution without rules still reaches review: nothing is deleted from the PDF, sections are chosen by hand (warned once, in init)
         return "미등록", with_defaults(config)
     return name, institution(config, name)
 
@@ -80,6 +79,8 @@ def cmd_init(args) -> int:
     job.record_step("init", institution=name)
     print(f"작업 폴더: {job.root}")
     print(f"기관: {name or '미확인'}")
+    if not name:
+        print("경고: 규칙이 등록된 시험 기관이 아닙니다. 워터마크는 지우지 않고, 보고서 구역은 직접 고릅니다.")
     print(f"한컴 COM: {'사용 가능' if env['hancom']['com_available'] else '없음'} ({env['os']['name']})")
     print(f"Gemini 키: {'있음' if env['gemini']['api_key_present'] else '없음'}")
     return 0
@@ -306,7 +307,7 @@ def cmd_map(args) -> int:
     job.record_step("map", changes=len(candidates["changes"]), effective=changed, warnings=len(candidates["warnings"]), mode=candidates["mode"], sections=[s["no"] for s in candidates["scopes"]])
     print(f"후보 {len(candidates['changes'])}건 (실제 변경 {changed}) · 경고 {len(candidates['warnings'])} · 미대응 그래프 {len(candidates['unmapped_regions'])}")
     how = {"auto": "성적서 목록으로 자동", "user": "사람이 지정", "whole": "구역 구분 없이 문서 전체"}[candidates["mode"]]
-    print(f"대응 구역 ({how}): " + (", ".join(f"{s['no']}. {s['title']}" for s in candidates["scopes"]) or "없음"))
+    print(f"대응 구역 ({how}): " + (", ".join((f"{s['no']}. " if s["no"] is not None else "") + s["title"] for s in candidates["scopes"]) or "없음"))
     if candidates["pending_sections"] and candidates["scopes"]:
         print(f"이 성적서에 없는 보고서 구역 {len(candidates['pending_sections'])}개는 손대지 않습니다.")
     for warning in candidates["warnings"]:

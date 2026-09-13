@@ -104,6 +104,10 @@ def test_graph_pages_that_cannot_be_told_apart_or_hold_other_text_are_blocked():
     result = build_candidates({"tables": []}, [_graph(11), _graph(12), _graph(21)], inventory, [], {}, {}, pdf_index, report_sections(inventory)[0])
     graph = [c for c in result["changes"] if c["kind"] == "fill_oscillogram_page"]
     assert len(graph) == 3 and all(c["status"] == "blocked" and "anchor_text_not_unique" in c["flags"] for c in graph)
+    # "Osc. N-1" inside "Osc. N-10" is not a duplicate
+    inventory = _report(["1. 시험A(TDa)", "\nOsc. N-1\n", "2. 시험B(TDb)", "\nOsc. N-10\n"])
+    result = build_candidates({"tables": []}, [_graph(11), _graph(21)], inventory, [], {}, {}, pdf_index, report_sections(inventory)[0])
+    assert all(c["status"] != "blocked" for c in result["changes"])
     inventory = _report(["1. 시험A(TDa)", "\nOsc. N-1\n시험 조건 12 kV\n"])
     result = build_candidates({"tables": []}, [_graph(11)], inventory, [], {}, {}, pdf_index, report_sections(inventory)[0])
     assert result["changes"][0]["status"] == "blocked" and "cell_has_other_text" in result["changes"][0]["flags"]

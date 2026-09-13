@@ -16,7 +16,7 @@ if exist "%USERPROFILE%\.local\bin\uv.exe" set "UV=%USERPROFILE%\.local\bin\uv.e
 if not exist "%UV%" (
     echo.
     echo uv 설치에 실패했습니다. 인터넷 연결을 확인한 뒤 install.bat 을 다시 실행하세요.
-    echo 계속 안 되면 README 의 "문제가 생겼을 때" 를 보세요.
+    echo 계속 안 되면 README 의 "처음 쓸 때 - 순서와 보내 줄 것" 를 보세요.
     pause
     exit /b 1
 )
@@ -26,14 +26,13 @@ echo [2/3] 필요한 프로그램(파이썬 3.12 포함)을 설치합니다. 처
 "%UV%" sync
 if errorlevel 1 (
     echo.
-    echo 설치 중 오류가 났습니다. 위 메시지를 복사해 두고 README 의 "문제가 생겼을 때" 를 보세요.
+    echo 설치 중 오류가 났습니다. 위 메시지를 복사해 두고 README 의 "처음 쓸 때 - 순서와 보내 줄 것" 를 보세요.
     pause
     exit /b 1
 )
 
 echo [3/3] 작업 폴더를 만듭니다...
 if not exist input mkdir input
-if not exist report mkdir report
 if not exist work mkdir work
 if not exist reports mkdir reports
 if not exist logs mkdir logs

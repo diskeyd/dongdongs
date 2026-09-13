@@ -28,7 +28,7 @@ def institution(config: dict, name: str) -> dict:
 
 
 REPORT_DEFAULTS = {
-    "section_heading_pattern": r"^(\d{1,3})\.\s*(\S.*)$",
+    "section_heading_pattern": r"^(\d{1,3})\.\s+(\S.*)$",
     "section_code_pattern": r"\(([A-Za-z][A-Za-z0-9_]*)\)\s*$",
 }
 

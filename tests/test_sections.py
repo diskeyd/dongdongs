@@ -108,3 +108,8 @@ def test_pdf_test_index_reads_the_list_page_and_the_toc_end(tmp_path):
     assert index["found"] and index["index_page"] == 2 and index["end_page"] == 5 and index["end_source"] == "table_of_contents"
     assert [(t["no"], t["code"], t["name"], t["page_from"], t["page_to"]) for t in index["sections"]] == [(1, "TDa", "Load switching", 3, 3), (2, "TDb", "Loop switching", 4, 5)]
     assert not read_test_index(pdf, {})["found"]
+
+
+def test_a_decimal_number_never_starts_a_section():
+    inventory = _report(["25.8kV 개폐기", "1. 외관검사(일반)", "2. 개폐시험(TDx1)"])
+    assert [(s["no"], s["page_from"]) for s in report_sections(inventory)] == [(1, 2), (2, 3)]

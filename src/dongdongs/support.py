@@ -26,7 +26,7 @@ REPORT_DIR = "reports"
 SECRET_KEYS = ("GEMINI_API_KEY",)
 
 # files copied into the default report zip (job root, relative names)
-REPORT_JSON = ("manifest.json", "environment.json", "watermark_report.json", "verification_clean.json", "verification_hwp.json")
+REPORT_JSON = ("manifest.json", "environment.json", "watermark_report.json", "verification_clean.json", "verification_hwp.json", "sections.json")
 # files that hold report values; only with --full
 FULL_ONLY_JSON = ("extracted_values.json", "regions.json", "hwp_inventory.json", "mapping_candidates.json", "approved_changes.json", "apply_log.json", "pdf_inspection.json")
 DATA_SUFFIXES = {".pdf", ".hwp", ".hwpx", ".png", ".jpg", ".jpeg", ".xml", ".bmp", ".gif", ".tif", ".tiff"}

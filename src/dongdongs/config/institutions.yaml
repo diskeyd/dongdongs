@@ -11,7 +11,8 @@
 # section per test. A section starts on the page whose cell begins with
 # "N. name(code)" and runs to the page before the next section.
 report:
-  section_heading_pattern: "^(\\d{1,3})\\.\\s*(\\S.*)$"
+  # a space after the dot is required, so "25.8kV ..." never starts a section
+  section_heading_pattern: "^(\\d{1,3})\\.\\s+(\\S.*)$"
   # only a Latin code in brackets counts as a test code ("(TDload2)" yes, "(일반)" no)
   section_code_pattern: "\\(([A-Za-z][A-Za-z0-9_]*)\\)\\s*$"
 

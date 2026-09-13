@@ -152,7 +152,7 @@ def tables_with_cell(inventory: dict, text: str, pages=None) -> list[dict]:
     return [t for t in inventory["tables"] if _in_pages(t, pages) and any(c["text"].strip().casefold() == wanted for c in t["cells"])]
 
 
-def test_sections(inventory: dict, heading_pattern: str = r"^(\d{1,3})\.\s*(\S.*)$", code_pattern: str = r"\(([A-Za-z][A-Za-z0-9_]*)\)\s*$") -> list[dict]:
+def test_sections(inventory: dict, heading_pattern: str = r"^(\d{1,3})\.\s+(\S.*)$", code_pattern: str = r"\(([A-Za-z][A-Za-z0-9_]*)\)\s*$") -> list[dict]:
     """Test sections of the report, from page cells whose first line reads ``N. name(code)``.
 
     Numbers must run on by one, so a stray numbered line in body text does not

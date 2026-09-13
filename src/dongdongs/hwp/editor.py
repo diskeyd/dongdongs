@@ -221,6 +221,8 @@ class HwpEditor:
             for ctrl in pictures:
                 self.delete_ctrl(ctrl)
         self._run("MoveListBegin")
+        if treat_as_char:
+            self._run("ParagraphShapeAlignCenter")  # an inline picture is centred in its cell; a floating one keeps its anchor
         self.insert_picture(png, width_hu, height_hu, treat_as_char)
         left = self.pictures_in_cell()
         if len(left) != 1:
@@ -263,6 +265,7 @@ class HwpEditor:
         for index, row in enumerate(rows):
             if index:
                 self.insert_text("\n")
+            self._run("ParagraphShapeAlignCenter")  # graphs sit centred like on the PDF page
             for pic in row:
                 self.insert_picture(Path(pic["png_path"]), pic["width_hwpunit"], pic["height_hwpunit"], treat_as_char=True)
         self._run("Cancel")

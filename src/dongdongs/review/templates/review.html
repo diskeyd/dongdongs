@@ -77,7 +77,7 @@
   <strong>그래프 쪽 {{ graph_pages|length }}개</strong> — 성적서 그래프 쪽을 한글의 "Osc." 쪽에 같은 배치로 넣습니다.
   {% set added = graph_pages | selectattr("hwp.page_to_be_added") | list %}
   {% if added %}한글에 쪽이 모자라 <strong>{{ added|length }}쪽을 마지막 그래프 쪽을 복사해 추가</strong>합니다.{% endif %}
-  가로는 셀 폭에 맞추고 세로만 줄입니다(세로 배율은 각 줄에 표시).
+  성적서 비율을 그대로 유지하고 한 쪽에 들어가도록 줄입니다(배율은 각 줄에 표시).
 </div>
 {% endif %}
 
@@ -100,8 +100,8 @@
       <td class="num">{% if c.kind == "fill_oscillogram_page" %}{{ c.hwp.page_no }}쪽{% if c.hwp.page_to_be_added %} (추가){% endif %}{% else %}표 {{ c.hwp.table }} · {{ c.hwp.address }}{% endif %}</td>
       <td class="num">{{ c.before if c.before is defined else "" }}{% if c.kind == "replace_picture" and c.hwp.size_hwpunit %}{{ (c.hwp.size_hwpunit[0] / 283.46) | round(1) }}×{{ (c.hwp.size_hwpunit[1] / 283.46) | round(1) }} mm{% endif %}</td>
       <td class="num">{{ c.after_extracted if c.after_extracted is defined else "" }}{% if c.after_markup %}<br><span class="flag">{{ c.after_markup }}</span>{% endif %}
-        {% if c.kind == "replace_picture" and c.target %}세로 {{ (c.target.vertical_scale * 100) | round }}%{% endif %}
-        {% if c.kind == "fill_oscillogram_page" %}{% for pic in c.pictures %}<div>{{ pic.layout }} {{ pic.width_mm }}×{{ pic.height_mm }} mm · 세로 {{ (pic.vertical_scale * 100) | round }}%</div>{% endfor %}{% endif %}
+        {% if c.kind == "replace_picture" and c.target %}{{ c.target.width_mm }}×{{ c.target.height_mm }} mm · 배율 {{ (c.target.scale * 100) | round }}%{% if c.hwp.caption %} · {{ c.hwp.caption }}{% endif %}{% endif %}
+        {% if c.kind == "fill_oscillogram_page" %}{% for pic in c.pictures %}<div>{{ pic.layout }} {{ pic.width_mm }}×{{ pic.height_mm }} mm · 배율 {{ (pic.scale * 100) | round }}%</div>{% endfor %}{% endif %}
       </td>
       <td class="after-cell">
         {% if c.kind == "set_cell_text" %}<input class="after" value="{{ after }}">{% elif c.kind == "replace_picture" %}그림 교체{% if c.target %} {{ c.target.width_mm }}×{{ c.target.height_mm }} mm{% endif %}{% else %}제목 {{ c.after }}<br>그림 {{ c.pictures|length }}장 삽입{% endif %}

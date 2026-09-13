@@ -67,3 +67,6 @@ institutions:
         reserved_height_mm: 14.0
         # cell top/bottom padding, mm
         padding_height_mm: 1.0
+      # oscillogram tables (picture cells under a header cell); filled with the graphs no graph page took
+      oscillogram_slots:
+        header_text: "오실로그램"

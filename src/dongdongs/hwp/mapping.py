@@ -16,7 +16,7 @@ import re
 import unicodedata
 
 from ..config.charmap import to_hwp_text
-from .inspector import occurrence_of, oscillogram_pages, tables_with_cell
+from .inspector import occurrence_of, oscillogram_pages, picture_slots, tables_with_cell
 
 
 _SPLIT = re.compile(r"^(?P<label>.*?\S)(?P<gap>[ \t]{2,})(?P<unit>\S(?:.*\S)?)$")
@@ -324,8 +324,8 @@ def picture_changes(regions: list[dict], inventory: dict, watermark_pages: dict[
         blocked = wm == "review_required"
         fit = fit_picture(region["bbox"], hu_to_mm(picture["width"]), hu_to_mm(picture["height"]))
         flags = ["watermark_manual_required"] if blocked else []
-        if not 0.5 <= fit["vertical_scale"] <= 1.2:
-            flags.append("vertical_scale_extreme")
+        if fit["fill_ratio"] is not None and fit["fill_ratio"] < SMALL_FILL_RATIO:
+            flags.append("picture_small_in_box")
         changes.append(
             {
                 "id": f"p{region['page']}-circuit-diagram",
@@ -367,23 +367,39 @@ def mm_to_hu(value: float) -> int:
     return int(round(value * HWPUNIT_PER_MM))
 
 
-def fit_picture(bbox, width_mm: float, height_mm: float) -> dict:
-    """Target size for a PDF region drawn at ``width_mm`` wide and at most ``height_mm`` high.
+PT_PER_MM = 72 / 25.4
 
-    The width is kept; only the height is squeezed (never stretched), so the
-    vertical scale tells the reviewer how much the graph is compressed.
-    """
+
+def natural_size_mm(bbox) -> tuple[float, float]:
+    """Size of a PDF region drawn at the PDF's own scale (1 pt = 1/72 in)."""
     x0, y0, x1, y1 = bbox
-    natural = width_mm * (y1 - y0) / (x1 - x0)
-    target = min(natural, height_mm)
+    return (x1 - x0) / PT_PER_MM, (y1 - y0) / PT_PER_MM
+
+
+def fit_picture(bbox, box_width_mm: float, box_height_mm: float, scale: float | None = None) -> dict:
+    """Target size for a PDF region inside a ``box_width_mm`` x ``box_height_mm`` box.
+
+    The PDF aspect ratio is kept: one uniform ``scale`` (the largest that fits the
+    box, unless given) is applied to both sides. ``fill_ratio`` tells the reviewer
+    how much of the box the picture covers.
+    """
+    natural_w, natural_h = natural_size_mm(bbox)
+    if scale is None:
+        scale = min(box_width_mm / natural_w, box_height_mm / natural_h) if natural_w and natural_h else 1.0
+    width, height = natural_w * scale, natural_h * scale
     return {
-        "width_mm": round(width_mm, 2),
-        "height_mm": round(target, 2),
-        "natural_height_mm": round(natural, 2),
-        "vertical_scale": round(target / natural, 3) if natural else 1.0,
-        "width_hwpunit": mm_to_hu(width_mm),
-        "height_hwpunit": mm_to_hu(target),
+        "width_mm": round(width, 2),
+        "height_mm": round(height, 2),
+        "natural_width_mm": round(natural_w, 2),
+        "natural_height_mm": round(natural_h, 2),
+        "scale": round(scale, 3),
+        "fill_ratio": round((width * height) / (box_width_mm * box_height_mm), 3) if box_width_mm and box_height_mm else None,
+        "width_hwpunit": mm_to_hu(width),
+        "height_hwpunit": mm_to_hu(height),
     }
+
+
+SMALL_FILL_RATIO = 0.5
 
 
 def _graph_rows(regions: list[dict]) -> list[list[dict]]:
@@ -400,12 +416,14 @@ def plan_oscillogram_pages(regions: list[dict], inventory: dict, cfg: dict, wate
     """One candidate per PDF graph page: the HWP page to fill, the title and every graph's target size."""
     cfg = cfg or {}
     watermark_pages = watermark_pages or {}
+    title_pattern = re.compile(cfg.get("title_pattern", r"^Osc\. \S+$"))
     by_page: dict[int, list[dict]] = {}
     for region in regions:
         if region["kind"] == "oscillogram" and region.get("png"):
             by_page.setdefault(region["page"], []).append(region)
-    pdf_pages = sorted(by_page)
-    hwp_pages = sorted(oscillogram_pages(inventory, cfg.get("title_pattern", r"^Osc\. \S+$")), key=lambda p: p["page_no"])
+    # only PDF pages titled like a graph page; the rest may belong to oscillogram slot tables
+    pdf_pages = sorted(p for p, group in by_page.items() if any(title_pattern.match(r.get("title") or "") for r in group))
+    hwp_pages = sorted(oscillogram_pages(inventory, title_pattern.pattern), key=lambda p: p["page_no"])
     warnings: list[str] = []
     if not pdf_pages:
         return [], warnings
@@ -430,20 +448,23 @@ def plan_oscillogram_pages(regions: list[dict], inventory: dict, cfg: dict, wate
         available = hu_to_mm(target["cell_height"]) - reserved
         rows = _graph_rows(page_regions)
         row_height = available / len(rows)
+        # one scale for the whole page so the layout stays exactly the PDF's
+        page_scale = 1.0
+        for row in rows:
+            widths = [natural_size_mm(r["bbox"])[0] for r in row]
+            heights = [natural_size_mm(r["bbox"])[1] for r in row]
+            page_scale = min(page_scale, (inner - gap * (len(row) - 1)) / sum(widths), row_height / max(heights))
         pictures = []
         for row in rows:
-            width = inner if len(row) == 1 else (inner - gap) / 2
-            fits = [fit_picture(r["bbox"], width, row_height) for r in row]
-            height = min(f["height_mm"] for f in fits)
-            for region, fit in zip(row, fits):
-                fit = dict(fit, height_mm=round(height, 2), height_hwpunit=mm_to_hu(height), vertical_scale=round(height / fit["natural_height_mm"], 3))
+            for region in row:
+                fit = fit_picture(region["bbox"], inner if len(row) == 1 else (inner - gap) / 2, row_height, scale=page_scale)
                 pictures.append({"png": region["png"], "pdf_index": region["index"], "layout": region.get("layout", "full"), "bbox": region["bbox"], **fit})
         wm = watermark_pages.get(page, "no_watermark")
         flags = []
         if added:
             flags.append("page_to_be_added")
-        if any(not 0.5 <= p["vertical_scale"] <= 1.2 for p in pictures):
-            flags.append("vertical_scale_extreme")
+        if page_scale < SMALL_FILL_RATIO:
+            flags.append("picture_small_in_box")
         if title is None:
             flags.append("pdf_title_missing")
         if wm == "review_required":
@@ -464,6 +485,7 @@ def plan_oscillogram_pages(regions: list[dict], inventory: dict, cfg: dict, wate
                     "copies_after_anchor": added,
                     "cell_inner_width_mm": inner,
                     "available_height_mm": round(available, 2),
+                    "page_scale": round(page_scale, 3),
                 },
                 "anchor": {
                     "text": target["title"],
@@ -481,6 +503,52 @@ def plan_oscillogram_pages(regions: list[dict], inventory: dict, cfg: dict, wate
                 "no_op": False,
             }
         )
+    return changes, warnings
+
+
+def plan_picture_slots(regions: list[dict], slots: list[dict], watermark_pages: dict[int, str], used_pngs: set[str]) -> tuple[list[dict], list[str]]:
+    """Pair the oscillograms that no graph page took with the picture cells of the HWP oscillogram tables.
+
+    The pairing is by document order on both sides (no PDF with these tables has
+    been seen yet, so every candidate is flagged ``slot_paired_by_order``).
+    """
+    leftover = sorted((r for r in regions if r["kind"] == "oscillogram" and r.get("png") and r["png"] not in used_pngs), key=lambda r: (r["page"], r["index"]))
+    warnings = [f"HWP 오실로그램 칸 {len(slots)}개, PDF 미배정 그래프 {len(leftover)}장"] if slots or leftover else []
+    changes = []
+    for region, slot in zip(leftover, slots):
+        wm = watermark_pages.get(region["page"], "no_watermark")
+        blocked = wm == "review_required"
+        fit = fit_picture(region["bbox"], hu_to_mm(slot["width"]), hu_to_mm(slot["height"]))
+        flags = ["slot_paired_by_order"] + (["watermark_manual_required"] if blocked else [])
+        if fit["fill_ratio"] is not None and fit["fill_ratio"] < SMALL_FILL_RATIO:
+            flags.append("picture_small_in_box")
+        changes.append(
+            {
+                "id": f"p{region['page']}-{region['index']}-slot-t{slot['table']}-{slot['row']}-{slot['col']}",
+                "kind": "replace_picture",
+                "hwp": {
+                    "table": slot["table"],
+                    "row": slot["row"],
+                    "col": slot["col"],
+                    "address": cell_address(slot["row"], slot["col"]),
+                    "page_no": slot.get("page_no"),
+                    "picture_index": slot["picture_index"],
+                    "bindata_id": slot["bindata_id"],
+                    "size_hwpunit": [slot["width"], slot["height"]],
+                    "treat_as_char": slot.get("treat_as_char"),
+                    "caption": slot.get("caption"),
+                },
+                "target": fit,
+                "anchor": {"text": slot["anchor_text"], "occurrence": slot["anchor_occurrence"], "address": cell_address(slot["anchor_row"], slot["anchor_col"])},
+                "after_png": region["png"],
+                "source": {"pdf_page": region["page"], "section": region.get("title"), "bbox": region["bbox"], "watermark_status": wm},
+                "flags": flags,
+                "status": "blocked" if blocked else "review_required",
+                "no_op": False,
+            }
+        )
+    if len(leftover) > len(slots):
+        warnings.append(f"{len(leftover) - len(slots)} leftover oscillograms have no HWP slot")
     return changes, warnings
 
 
@@ -529,6 +597,11 @@ def build_candidates(extracted: dict, regions: list[dict], inventory: dict, sect
     changes.extend(pages_planned)
     warnings.extend(page_notes)
     planned = {(pic["png"]) for change in pages_planned for pic in change["pictures"]}
+    slots = picture_slots(inventory, pictures_cfg.get("oscillogram_slots", {}).get("header_text", "오실로그램"))
+    slot_changes, slot_notes = plan_picture_slots(regions, slots, watermark_pages, planned)
+    changes.extend(slot_changes)
+    warnings.extend(slot_notes)
+    planned |= {c["after_png"] for c in slot_changes}
     unmapped = [r for r in regions if r.get("export") and r["kind"] != "circuit_diagram" and r.get("png") not in planned]
     return {
         "pairs": pairs,

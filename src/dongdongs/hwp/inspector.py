@@ -190,6 +190,50 @@ def oscillogram_pages(inventory: dict, title_pattern: str = r"^Osc\. \S+$") -> l
     return pages
 
 
+def picture_slots(inventory: dict, header_text: str = "오실로그램") -> list[dict]:
+    """Picture-holding cells of the tables that carry ``header_text`` (the oscillogram tables), in document order.
+
+    Each slot records the picture's size (the box a replacement must fit in), the
+    nearest caption text in the same table and the table's header cell as anchor.
+    """
+    slots = []
+    for table in inventory["tables"]:
+        header = next((c for c in table["cells"] if c["text"].strip().casefold() == header_text.strip().casefold()), None)
+        if header is None:
+            continue
+        pictures = sorted(
+            (p for p in inventory["pictures"] if p["container"] and p["container"]["table"] == table["index"]),
+            key=lambda p: (p["container"]["row"], p["container"]["col"], p["index"]),
+        )
+        if not pictures:
+            continue
+        picture_cells = {(p["container"]["row"], p["container"]["col"]) for p in pictures}
+        captions = [c for c in table["cells"] if c["text"].strip() and (c["row"], c["col"]) not in picture_cells and c is not header]
+        occurrence = occurrence_of(inventory, header["text"], table["index"], header["row"], header["col"])
+        for picture in pictures:
+            row, col = picture["container"]["row"], picture["container"]["col"]
+            near = sorted(captions, key=lambda c: (abs(c["row"] - row) + (0 if c["row"] == row else 0.5), abs(c["col"] - col)))
+            slots.append(
+                {
+                    "table": table["index"],
+                    "page_no": table.get("page_no"),
+                    "row": row,
+                    "col": col,
+                    "picture_index": picture["index"],
+                    "bindata_id": picture["bindata_id"],
+                    "width": picture["width"],
+                    "height": picture["height"],
+                    "treat_as_char": picture.get("treat_as_char"),
+                    "caption": near[0]["text"].strip() if near else None,
+                    "anchor_text": header["text"],
+                    "anchor_occurrence": occurrence,
+                    "anchor_row": header["row"],
+                    "anchor_col": header["col"],
+                }
+            )
+    return slots
+
+
 def structure_signature(inventory: dict) -> dict:
     return {
         "table_count": inventory["table_count"],

@@ -141,13 +141,17 @@ def test_merged_label_cell_across_separator_is_matched():
     assert warnings == []
 
 
-def test_fit_picture_keeps_width_and_only_squeezes_height():
+def test_fit_picture_keeps_the_pdf_aspect_ratio():
     from dongdongs.hwp.mapping import fit_picture
 
-    squeezed = fit_picture([0, 0, 480, 330], 168.8, 98.0)
-    assert squeezed["width_mm"] == 168.8 and squeezed["height_mm"] == 98.0 and 0.84 < squeezed["vertical_scale"] < 0.86
-    natural = fit_picture([0, 0, 480, 330], 168.8, 200.0)
-    assert natural["height_mm"] == natural["natural_height_mm"] and natural["vertical_scale"] == 1.0
+    fit = fit_picture([0, 0, 480, 330], 168.8, 98.0)  # 169.3 x 116.4 mm natural
+    assert fit["natural_width_mm"] == 169.33 and fit["natural_height_mm"] == 116.42
+    assert fit["height_mm"] == 98.0 and 0.84 < fit["scale"] < 0.85 and abs(fit["width_mm"] - 169.33 * fit["scale"]) < 0.1
+    assert abs(fit["width_mm"] / fit["height_mm"] - 480 / 330) < 0.01
+    natural = fit_picture([0, 0, 480, 330], 200.0, 200.0)
+    assert natural["scale"] > 1 and natural["width_mm"] == 200.0
+    forced = fit_picture([0, 0, 240, 330], 83.65, 98.0, scale=0.5)
+    assert forced["scale"] == 0.5 and forced["width_mm"] == round(240 / (72 / 25.4) * 0.5, 2)
 
 
 def _graph_regions(page, layouts):
@@ -175,10 +179,39 @@ def test_graph_pages_are_planned_in_order_and_missing_pages_are_added():
     assert [c["hwp"]["page_no"] for c in changes] == [1, 2, 3]
     assert changes[0]["before"] == "Osc. OLD-1" and changes[0]["after"] == "Osc. X-022"
     assert [p["layout"] for p in changes[0]["pictures"]] == ["full", "half-left", "half-right"]
-    assert changes[0]["pictures"][1]["width_mm"] == changes[0]["pictures"][2]["width_mm"] == round((168.8 - 1.5) / 2, 2)
-    assert changes[0]["pictures"][1]["height_mm"] == changes[0]["pictures"][2]["height_mm"]
-    assert all(0.8 < p["vertical_scale"] <= 1.0 for c in changes for p in c["pictures"])
+    first = changes[0]["pictures"]
+    assert len({p["scale"] for p in first}) == 1 and first[0]["scale"] == changes[0]["hwp"]["page_scale"]
+    assert first[1]["width_mm"] + 1.5 + first[2]["width_mm"] <= 168.8 and first[0]["width_mm"] <= 168.8
+    assert first[0]["height_mm"] + first[1]["height_mm"] <= changes[0]["hwp"]["available_height_mm"]
+    assert all(abs(p["width_mm"] / p["height_mm"] - (p["bbox"][2] - p["bbox"][0]) / (p["bbox"][3] - p["bbox"][1])) < 0.01 for c in changes for p in c["pictures"])
+    assert all(0.8 < p["scale"] <= 1.0 for c in changes for p in c["pictures"])
     assert changes[2]["hwp"]["page_to_be_added"] and changes[2]["hwp"]["copies_after_anchor"] == 1 and "page_to_be_added" in changes[2]["flags"]
     assert changes[2]["anchor"]["text"] == "Osc. OLD-2"
     assert any("1 pages will be added" in w for w in warnings)
     assert all(c["status"] == "review_required" for c in changes)
+
+
+def test_untitled_oscillograms_go_to_slot_tables_in_order():
+    from dongdongs.hwp.mapping import plan_oscillogram_pages, plan_picture_slots
+    from dongdongs.hwp.inspector import picture_slots
+
+    inventory = _graph_page_inventory(["Osc. OLD-1"])
+    slot_cells = [{"row": r, "col": c, "rowspan": 1, "colspan": 1, "width": 20000, "height": 10000, "text": ""} for r in (1, 2) for c in (0, 1)]
+    cells = [{"row": 0, "col": 0, "rowspan": 1, "colspan": 2, "width": 40000, "height": 1500, "text": "오실로그램"}, *slot_cells,
+             {"row": 3, "col": 0, "rowspan": 1, "colspan": 2, "width": 40000, "height": 1500, "text": "Osc.No.01 (01 ~ 04)"}]
+    inventory["tables"].append({"index": 1, "depth": 1, "page_no": 5, "frame": 1, "container": None, "rows": 4, "cols": 2, "width": 1, "height": 1, "cells": cells})
+    inventory["paragraphs"].append({"text": "오실로그램", "container": {"table": 1, "row": 0, "col": 0}})
+    for i, cell in enumerate(slot_cells):
+        inventory["pictures"].append({"index": i, "bindata_id": 50 + i, "width": 20700, "height": 10500, "treat_as_char": None, "flow": "block", "container": {"table": 1, "row": cell["row"], "col": cell["col"]}, "page_no": 5})
+    slots = picture_slots(inventory)
+    assert [(s["row"], s["col"]) for s in slots] == [(1, 0), (1, 1), (2, 0), (2, 1)] and slots[0]["caption"] == "Osc.No.01 (01 ~ 04)"
+    titled = _graph_regions(22, ["full", "half-left", "half-right"])
+    untitled = [dict(r, page=30, title=None, png=f"images/p030-{r['index']}.png") for r in _graph_regions(30, ["full", "full"])]
+    pages, _ = plan_oscillogram_pages(titled + untitled, inventory, {}, {})
+    assert [c["source"]["pdf_page"] for c in pages] == [22]
+    used = {p["png"] for c in pages for p in c["pictures"]}
+    changes, warnings = plan_picture_slots(titled + untitled, slots, {}, used)
+    assert [c["after_png"] for c in changes] == ["images/p030-0.png", "images/p030-1.png"]
+    assert changes[0]["hwp"]["address"] == "A2" and changes[0]["anchor"]["text"] == "오실로그램" and "slot_paired_by_order" in changes[0]["flags"]
+    assert changes[0]["target"]["scale"] < 1 and abs(changes[0]["target"]["width_mm"] / changes[0]["target"]["height_mm"] - 480 / 327) < 0.01
+    assert warnings[0].startswith("HWP 오실로그램 칸 4개, PDF 미배정 그래프 2장")

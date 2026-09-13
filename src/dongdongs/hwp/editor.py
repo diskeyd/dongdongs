@@ -14,9 +14,9 @@ Three kinds of change are applied:
 
 * ``set_cell_text``          replace the text of one table cell
 * ``replace_picture``        delete the picture in a cell and insert a PNG at the same size
-* ``fill_oscillogram_page``  rewrite the title line of a graph page and insert its graphs
-                             (width fixed, height squeezed to the planned size); pages that
-                             do not exist yet are made by copying the last graph page
+* ``fill_oscillogram_page``  rewrite the title line of a graph page and insert its graphs at the
+                             planned size; pages that do not exist yet are made by copying the
+                             last graph page of the same test section, right after it
 """
 
 from __future__ import annotations
@@ -26,8 +26,8 @@ import shutil
 import sys
 from pathlib import Path
 
-from ..job import sha256_file
-from .mapping import cell_address, hu_to_mm
+from ..job import report_stem, sha256_file
+from .mapping import anchor_page_of, cell_address, hu_to_mm
 
 _ADDRESS = re.compile(r"\b([A-Z]{1,3})(\d{1,4})\b")
 SIZE_TOLERANCE = 0.01  # 1 % of the planned size
@@ -277,8 +277,9 @@ class HwpEditor:
 
 def prepare_result_copies(original: Path, result_dir: Path) -> tuple[Path, Path]:
     result_dir.mkdir(parents=True, exist_ok=True)
-    before = result_dir / f"{original.stem}.before.hwp"
-    processed = result_dir / f"{original.stem}.processed.hwp"
+    # continuing from a previous result keeps the report's own name: 보고서.processed.hwp, never .processed.processed
+    before = result_dir / f"{report_stem(original)}.before.hwp"
+    processed = result_dir / f"{report_stem(original)}.processed.hwp"
     if before.exists() or processed.exists():
         raise EditorError(f"result copies already exist in {result_dir}; start a new job instead of overwriting")
     digest = sha256_file(original)
@@ -296,17 +297,32 @@ def _goto_anchor(editor: HwpEditor, change: dict) -> None:
         raise EditorError(f"anchor mismatch at {editor.current_address()}")
 
 
+def _apply_order(change: dict) -> tuple:
+    """Graph pages first, in page order; a section's new pages before its last page is retitled (it is their anchor)."""
+    hwp = change.get("hwp", {})
+    is_graph = change["kind"] == "fill_oscillogram_page"
+    added = bool(hwp.get("page_to_be_added"))
+    page = (hwp.get("page_no_before") or hwp.get("page_no") or 0) if is_graph else 0
+    return (not is_graph, page, not added, hwp.get("copies_after_anchor") or 0)
+
+
 def apply_changes(original: Path, result_dir: Path, approved: list[dict], visible: bool = False, job_root: Path | None = None) -> dict:
     before, processed = prepare_result_copies(original, result_dir)
     editor = HwpEditor(visible=visible)
     log: list[dict] = []
     pages_before = pages_after = None
     added_pages: set[int] = set()
+    copies: list[dict] = []
     try:
         editor.open(processed)
         pages_before = editor.page_count()
-        # graph pages that must be created first, in page order, so later anchors still resolve
-        ordered = sorted(approved, key=lambda c: (c["kind"] != "fill_oscillogram_page", c.get("hwp", {}).get("page_no") or 0))
+        ordered = sorted(approved, key=_apply_order)
+        # new graph pages of one section hang off the same anchor (the section's last graph page)
+        to_add: dict[str, int] = {}
+        for change in ordered:
+            if change["kind"] == "fill_oscillogram_page" and change["hwp"].get("page_to_be_added") and not change.get("no_op"):
+                to_add[change["anchor"]["text"]] = to_add.get(change["anchor"]["text"], 0) + 1
+        copied: set[str] = set()
         for change in ordered:
             entry = {"id": change["id"], "kind": change["kind"]}
             try:
@@ -330,15 +346,18 @@ def apply_changes(original: Path, result_dir: Path, approved: list[dict], visibl
                     png = (job_root / change["after_png"]) if job_root else Path(change["after_png"])
                     result = editor.replace_picture(png, target["width_hwpunit"], target["height_hwpunit"], tuple(change["hwp"].get("size_hwpunit") or ()) or None)
                     entry.update(apply_status="applied", inserted=result)
+                elif change["kind"] == "fill_oscillogram_page" and change.get("no_op"):
+                    entry["apply_status"] = "skipped_no_op"
                 elif change["kind"] == "fill_oscillogram_page":
                     _goto_anchor(editor, change)
                     editor.goto_cell(change["hwp"]["address"])
-                    copies = int(change["hwp"].get("copies_after_anchor") or 0)
-                    if copies:
-                        if not added_pages:
-                            # first page to add: make every missing copy now, right after the last graph page
-                            total = max(int(c["hwp"].get("copies_after_anchor") or 0) for c in ordered if c["kind"] == "fill_oscillogram_page")
-                            editor.copy_current_frame_after_itself(total)
+                    if change["hwp"].get("page_to_be_added"):
+                        group = change["anchor"]["text"]
+                        if group not in copied:
+                            # first new page of this section: make all of the section's approved copies right after its last graph page
+                            editor.copy_current_frame_after_itself(to_add[group])
+                            copied.add(group)
+                            copies.append({"anchor": group, "anchor_page": anchor_page_of(change), "count": to_add[group]})
                             _goto_anchor(editor, change)
                         # copies still carry the old title; renamed ones no longer match, so the first hit is the next unfilled copy
                         editor._run("CloseEx")
@@ -346,7 +365,7 @@ def apply_changes(original: Path, result_dir: Path, approved: list[dict], visibl
                             raise EditorError("copied graph page not found after the anchor")
                         editor._run("Cancel")
                         editor.goto_cell(change["hwp"]["address"])
-                        added_pages.add(change["hwp"]["page_no"])
+                        added_pages.add(change["hwp"].get("page_no_after") or change["hwp"]["page_no"])
                     pictures = []
                     for pic in change["pictures"]:
                         pictures.append({**pic, "png_path": str((job_root / pic["png"]) if job_root else Path(pic["png"]))})
@@ -367,6 +386,7 @@ def apply_changes(original: Path, result_dir: Path, approved: list[dict], visibl
         "page_count_before": pages_before,
         "page_count_after": pages_after,
         "pages_added": sorted(added_pages),
+        "copies": copies,
         "changes": log,
     }
 

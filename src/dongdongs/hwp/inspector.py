@@ -142,9 +142,57 @@ def build_inventory(xml_path: Path, source_name: str | None = None) -> dict:
     }
 
 
-def tables_with_cell(inventory: dict, text: str) -> list[dict]:
+def _in_pages(table: dict, pages) -> bool:
+    return pages is None or table.get("page_no") in pages
+
+
+def tables_with_cell(inventory: dict, text: str, pages=None) -> list[dict]:
+    """Tables with a cell whose whole text is ``text``; ``pages`` limits them to those page numbers."""
     wanted = text.strip().casefold()
-    return [t for t in inventory["tables"] if any(c["text"].strip().casefold() == wanted for c in t["cells"])]
+    return [t for t in inventory["tables"] if _in_pages(t, pages) and any(c["text"].strip().casefold() == wanted for c in t["cells"])]
+
+
+def test_sections(inventory: dict, heading_pattern: str = r"^(\d{1,3})\.\s*(\S.*)$", code_pattern: str = r"\(([A-Za-z][A-Za-z0-9_]*)\)\s*$") -> list[dict]:
+    """Test sections of the report, from page cells whose first line reads ``N. name(code)``.
+
+    Numbers must run on by one, so a stray numbered line in body text does not
+    start a section. A section runs to the page before the next one starts; the
+    last runs to the end of the document. Returns [] when the report has no such
+    headings (then the whole document is one scope).
+    """
+    heading, code_re = re.compile(heading_pattern), re.compile(code_pattern)
+    starts: list[dict] = []
+    frames = sorted((t for t in inventory["tables"] if t.get("depth") == 0 and t.get("page_no")), key=lambda t: (t["page_no"], t["index"]))
+    for table in frames:
+        for cell in sorted(table["cells"], key=lambda c: (c["row"], c["col"])):
+            first = next((line.strip() for line in cell["text"].split("\n") if line.strip()), "")
+            match = heading.match(first)
+            if not match:
+                continue
+            no = int(match.group(1))
+            if starts and no != starts[-1]["no"] + 1:
+                continue
+            title = " ".join(match.group(2).split())
+            code = code_re.search(title)
+            starts.append(
+                {
+                    "no": no,
+                    "title": title,
+                    "name": title[: code.start()].strip() if code else title,
+                    "code": code.group(1) if code else None,
+                    "page_from": table["page_no"],
+                    "table": table["index"],
+                }
+            )
+    last_page = inventory.get("page_count") or max((t.get("page_no") or 0 for t in inventory["tables"]), default=0)
+    for current, following in zip(starts, starts[1:]):
+        current["page_to"] = max(current["page_from"], following["page_from"] - 1)
+    if starts:
+        starts[-1]["page_to"] = max(starts[-1]["page_from"], last_page)
+    return starts
+
+
+test_sections.__test__ = False
 
 
 def occurrence_of(inventory: dict, text: str, table: int, row: int, col: int) -> int | None:
@@ -161,12 +209,13 @@ def occurrence_of(inventory: dict, text: str, table: int, row: int, col: int) ->
     return None
 
 
-def oscillogram_pages(inventory: dict, title_pattern: str = r"^Osc\. \S+$") -> list[dict]:
+def oscillogram_pages(inventory: dict, title_pattern: str = r"^Osc\. \S+$", pages=None) -> list[dict]:
     """Top-level page frames whose big cell holds a line matching ``title_pattern`` (the graph pages)."""
     pattern = re.compile(title_pattern)
+    limit = pages
     pages = []
     for table in inventory["tables"]:
-        if table["depth"] != 0:
+        if table["depth"] != 0 or not _in_pages(table, limit):
             continue
         for cell in table["cells"]:
             lines = [line.strip() for line in cell["text"].split("\n")]
@@ -190,7 +239,7 @@ def oscillogram_pages(inventory: dict, title_pattern: str = r"^Osc\. \S+$") -> l
     return pages
 
 
-def picture_slots(inventory: dict, header_text: str = "오실로그램") -> list[dict]:
+def picture_slots(inventory: dict, header_text: str = "오실로그램", pages=None) -> list[dict]:
     """Picture-holding cells of the tables that carry ``header_text`` (the oscillogram tables), in document order.
 
     Each slot records the picture's size (the box a replacement must fit in), the
@@ -198,6 +247,8 @@ def picture_slots(inventory: dict, header_text: str = "오실로그램") -> list
     """
     slots = []
     for table in inventory["tables"]:
+        if not _in_pages(table, pages):
+            continue
         header = next((c for c in table["cells"] if c["text"].strip().casefold() == header_text.strip().casefold()), None)
         if header is None:
             continue

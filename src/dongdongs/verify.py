@@ -120,7 +120,7 @@ def _size_ok(expected, found, tolerance: float = 0.01) -> bool:
     return all(abs(e - f) <= max(1, e * tolerance) for e, f in zip(expected, found))
 
 
-def compare_hwp(before: dict, after: dict, applied: list[dict]) -> dict:
+def compare_hwp(before: dict, after: dict, applied: list[dict], copies: list[dict] | None = None) -> dict:
     """Structure must be unchanged except for what the applied changes explain.
 
     Applied ``fill_oscillogram_page`` changes may add page frames (copied graph
@@ -131,10 +131,20 @@ def compare_hwp(before: dict, after: dict, applied: list[dict]) -> dict:
     done = [c for c in applied if c.get("apply_status") == "applied"]
     text_changes = {(c["hwp"]["table"], c["hwp"]["row"], c["hwp"]["col"]): c for c in done if c.get("kind", "set_cell_text") == "set_cell_text"}
     picture_changes = {(c["hwp"]["table"], c["hwp"]["row"], c["hwp"]["col"]): c for c in done if c.get("kind") == "replace_picture"}
-    page_changes = {c["hwp"]["page_no"]: c for c in done if c.get("kind") == "fill_oscillogram_page"}
-    added_pages = {c["hwp"]["page_no"] for c in page_changes.values() if c["hwp"].get("page_to_be_added")}
-    # page numbers of filled pages refer to the "before" document; added pages only exist in "after"
-    filled_changes = {p: c for p, c in page_changes.items() if p not in added_pages}
+    from .hwp.mapping import graph_page_positions
+
+    fills = [c for c in done if c.get("kind") == "fill_oscillogram_page"]
+    counts_given = {int(c["anchor_page"]): int(c["count"]) for c in copies} if copies is not None else None
+    positions, copy_counts = graph_page_positions(fills, counts_given)
+
+    def shift(page: int) -> int:
+        return sum(n for anchor, n in copy_counts.items() if anchor < page)
+
+    # copies sit right after their section's last graph page; later pages move down by the copies before them
+    added_pages = {anchor + shift(anchor) + k for anchor, n in copy_counts.items() for k in range(1, n + 1)}
+    added_changes = {positions[c["id"]]: c for c in fills if c["hwp"].get("page_to_be_added") and c["id"] in positions}
+    # filled pages are named by their page in the "before" document
+    filled_changes = {(c["hwp"].get("page_no_before") or c["hwp"]["page_no"]): c for c in fills if not c["hwp"].get("page_to_be_added")}
 
     # drop the frames that were added (and everything nested in them) so the rest lines up
     after_tables = [t for t in after["tables"] if t.get("page_no") not in added_pages]
@@ -142,12 +152,22 @@ def compare_hwp(before: dict, after: dict, applied: list[dict]) -> dict:
     if len(before["tables"]) != len(after_tables):
         problems.append(f"table count {len(before['tables'])} -> {len(after_tables)} (after removing {len(added_pages)} added pages)")
     expected_pictures = before["picture_count"]
-    for change in page_changes.values():
-        if not change["hwp"].get("page_to_be_added"):
-            expected_pictures += len(change["pictures"]) - int(change["hwp"].get("existing_pictures") or 0)
+    for change in filled_changes.values():
+        expected_pictures += len(change["pictures"]) - int(change["hwp"].get("existing_pictures") or 0)
     if expected_pictures != len(after_pictures):
         problems.append(f"picture count {len(after_pictures)}, expected {expected_pictures}")
     after_index_of = {a["index"]: b["index"] for a, b in zip(before["tables"], after_tables)}
+    after_page_of = {t["index"]: t.get("page_no") for t in after["tables"]}
+    for anchor in copy_counts:
+        frame = next((t for t in before["tables"] if t.get("depth") == 0 and t.get("page_no") == anchor), None)
+        moved_to = after_page_of.get(after_index_of.get(frame["index"])) if frame else None
+        if moved_to != anchor + shift(anchor):
+            problems.append(f"graph page {anchor} should be on page {anchor + shift(anchor)} after the copies before it, found {moved_to}")
+    if before.get("sections") and after.get("sections"):
+        names_before = [(x["no"], x["title"]) for x in before["sections"]]
+        names_after = [(x["no"], x["title"]) for x in after["sections"]]
+        if names_before != names_after:
+            problems.append("report test sections changed (numbers or titles)")
     unexpected, missing_values, size_changes, picture_problems = [], [], [], []
     for table_a, table_b in zip(before["tables"], after_tables):
         if (table_a["rows"], table_a["cols"], len(table_a["cells"])) != (table_b["rows"], table_b["cols"], len(table_b["cells"])):
@@ -205,7 +225,10 @@ def compare_hwp(before: dict, after: dict, applied: list[dict]) -> dict:
             picture_problems.append({"page": page_no, "expected": planned, "found": [[p["width"], p["height"]] for p in found]})
     for page_no in sorted(added_pages):
         frame = next((t for t in after["tables"] if t.get("depth") == 0 and t.get("page_no") == page_no), None)
-        change = page_changes[page_no]
+        change = added_changes.get(page_no)
+        if change is None:
+            problems.append(f"graph page {page_no} was copied but not filled")
+            continue
         if frame is None:
             problems.append(f"added graph page {page_no} not found")
             continue

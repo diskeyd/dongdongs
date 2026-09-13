@@ -46,6 +46,16 @@ def _describe(path: Path) -> dict:
     return {"path": str(path), "name": path.name, "bytes": path.stat().st_size, "sha256": sha256_file(path)}
 
 
+def report_stem(path: Path) -> str:
+    """Name of the report behind a file: ``보고서.processed.processed.hwp`` -> ``보고서``."""
+    stem = Path(path).stem
+    while True:
+        trimmed = re.sub(r"\.(processed|before)$", "", stem)
+        if trimmed == stem:
+            return stem
+        stem = trimmed
+
+
 def _slug(text: str) -> str:
     return re.sub(r"[^0-9A-Za-z._-]+", "-", text).strip("-")[:40] or "job"
 
@@ -88,7 +98,7 @@ class Job:
         write_json(self.manifest_path, manifest)
 
 
-def create_job(work_root: Path, pdf: Path, hwp: Path | None = None, job_id: str | None = None) -> Job:
+def create_job(work_root: Path, pdf: Path, hwp: Path | None = None, job_id: str | None = None, parent_job: str | None = None) -> Job:
     pdf = pdf.resolve()
     if not pdf.is_file():
         raise FileNotFoundError(pdf)
@@ -105,9 +115,11 @@ def create_job(work_root: Path, pdf: Path, hwp: Path | None = None, job_id: str 
     inputs = {"pdf": _describe(pdf)}
     if hwp is not None:
         inputs["hwp"] = _describe(hwp)
+        # a report is filled over several jobs; a later job starts from the previous job's result
+        inputs["hwp"]["role"] = f"processed_of:{parent_job}" if parent_job else "original"
     write_json(
         root / "manifest.json",
-        {"job_id": job_id, "created_at": now_kst(), "inputs": inputs, "institution": None, "steps": []},
+        {"job_id": job_id, "created_at": now_kst(), "inputs": inputs, "institution": None, "parent_job": parent_job, "steps": []},
     )
     return Job(root)
 

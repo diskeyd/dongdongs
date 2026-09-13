@@ -27,6 +27,17 @@ def institution(config: dict, name: str) -> dict:
         raise KeyError(f"unknown institution {name!r}; configured: {known}") from exc
 
 
+REPORT_DEFAULTS = {
+    "section_heading_pattern": r"^(\d{1,3})\.\s*(\S.*)$",
+    "section_code_pattern": r"\(([A-Za-z][A-Za-z0-9_]*)\)\s*$",
+}
+
+
+def report_rules(config: dict) -> dict:
+    """Rules of the HWP report format (not of an institution), with defaults."""
+    return {**REPORT_DEFAULTS, **(config.get("report") or {})}
+
+
 def detect_institution(pdf_path: Path, config: dict) -> str | None:
     with pymupdf.open(pdf_path) as doc:
         texts = [page.get_text() for page in doc]
@@ -39,4 +50,4 @@ def detect_institution(pdf_path: Path, config: dict) -> str | None:
     return None
 
 
-__all__ = ["detect_institution", "institution", "load_charmap", "load_config", "nfkc_equal", "to_hwp_text"]
+__all__ = ["detect_institution", "institution", "load_charmap", "load_config", "nfkc_equal", "report_rules", "to_hwp_text"]

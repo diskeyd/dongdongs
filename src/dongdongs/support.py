@@ -202,6 +202,8 @@ def report_summary(job_root: Path | None, manifest: dict | None, full: bool) -> 
         return "\n".join(lines) + "\n"
     lines.append(f"작업: {manifest.get('job_id') if manifest else job_root.name}")
     lines.append(f"기관: {manifest.get('institution') if manifest else '?'}")
+    if manifest and manifest.get("parent_job"):
+        lines.append(f"이어 쓴 이전 작업: {manifest['parent_job']}")
     lines.append("")
     lines.append("단계 기록:")
     for step in (manifest or {}).get("steps", []):

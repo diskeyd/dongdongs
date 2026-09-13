@@ -9,7 +9,9 @@
   * { box-sizing: border-box; }
   body { margin:0; padding:16px 24px 96px; font:14px/1.45 -apple-system, "Segoe UI", "Malgun Gothic", sans-serif; color:var(--fg); background:var(--bg); }
   h1 { font-size:20px; margin:0 0 4px; }
-  h2 { font-size:16px; margin:28px 0 8px; }
+  h2 { font-size:17px; margin:34px 0 6px; padding-top:10px; border-top:2px solid var(--line); }
+  h2 .meta { font-size:13px; font-weight:400; margin:0; display:inline; }
+  h3 { font-size:15px; margin:18px 0 8px; }
   .meta { color:var(--muted); margin-bottom:12px; }
   .banner { border:1px solid var(--line); background:var(--card); border-radius:8px; padding:10px 14px; margin:8px 0; }
   .banner.ok { border-left:4px solid var(--ok); } .banner.warn { border-left:4px solid var(--warn); } .banner.bad { border-left:4px solid var(--bad); }
@@ -66,6 +68,16 @@
 </div>
 {% endif %}
 
+{% if candidates.hwp_sections %}
+<div class="banner {{ 'ok' if candidates.mode == 'auto' else 'warn' }}">
+  <strong>보고서 구역</strong> —
+  {% if candidates.mode == "auto" %}성적서의 시험 목록으로 짝지었습니다.{% elif candidates.mode == "user" %}사람이 고른 구역에 넣습니다.{% else %}성적서에서 시험 목록을 찾지 못해 문서 전체로 짝지었습니다. 이 성적서가 일부 구역만 채운다면 run.bat 에서 구역 번호를 고르세요.{% endif %}
+  <br>이 성적서가 채우는 구역: {% for s in candidates.scopes %}{% if s.no is not none %}{{ s.no }}. {{ s.title }}{% if not loop.last %} · {% endif %}{% endif %}{% endfor %}
+  {% if previous_text %}<br>이전 작업에서 이미 반영된 구역: {{ previous_text }}{% endif %}
+  {% if pending_text %}<br>성적서가 아직 없는 구역 (손대지 않음): {{ pending_text }}{% endif %}
+</div>
+{% endif %}
+
 <div class="banner">
   <strong>페이지 대응</strong>
   {% for p in candidates.pairs %}p{{ p.pdf_page }} → HWP 표 {{ p.hwp_table }} ({{ p.method }}, 라벨 유사도 {{ p.label_similarity }}){% if not loop.last %} · {% endif %}{% endfor %}
@@ -76,13 +88,18 @@
 <div class="banner{% if graph_pages | selectattr('hwp.page_to_be_added') | list %} warn{% endif %}">
   <strong>그래프 쪽 {{ graph_pages|length }}개</strong> — 성적서 그래프 쪽을 한글의 "Osc." 쪽에 같은 배치로 넣습니다.
   {% set added = graph_pages | selectattr("hwp.page_to_be_added") | list %}
-  {% if added %}한글에 쪽이 모자라 <strong>{{ added|length }}쪽을 마지막 그래프 쪽을 복사해 추가</strong>합니다.{% endif %}
+  {% if added %}한글에 쪽이 모자라 <strong>{{ added|length }}쪽을 각 구역의 마지막 그래프 쪽 뒤에 복사해 추가</strong>합니다.{% endif %}
+  {% set seedless = graph_pages | selectattr("status", "equalto", "blocked") | list %}
+  {% if seedless %}<br>그래프 쪽이 하나도 없는 구역의 {{ seedless|length }}쪽은 <strong>차단</strong>됩니다. 한글에서 그 구역 끝에 Osc. 쪽 하나를 복사해 넣고 다시 실행하세요.{% endif %}
   성적서 비율을 그대로 유지하고 한 쪽에 들어가도록 줄입니다(배율은 각 줄에 표시).
 </div>
 {% endif %}
 
-{% for page, changes in pages %}
-<h2>PDF {{ page }}쪽{% if changes and changes[0].source.printed_page %} ({{ changes[0].source.printed_page }}){% endif %}</h2>
+{% for g in groups %}
+<h2>{% if g.scope.no is not none %}{{ g.scope.no }}. {% endif %}{{ g.scope.title }}
+  <span class="meta">— 표 칸 {{ g.counts.cells }} · 그림 {{ g.counts.pictures }} · 그래프 쪽 {{ g.counts.graph }}{% if g.counts.added %} (추가 {{ g.counts.added }}){% endif %}{% if g.counts.blocked %} · 차단 {{ g.counts.blocked }}{% endif %}</span></h2>
+{% for page, changes in g.pages %}
+<h3>PDF {{ page }}쪽{% if changes and changes[0].source.printed_page %} ({{ changes[0].source.printed_page }}){% endif %}</h3>
 <div class="wrap">
 <table>
   <thead><tr><th>근거</th><th>구역 · 항목</th><th>HWP 위치</th><th>HWP 현재값</th><th>추출값</th><th>반영값</th><th>표시</th><th>결정</th></tr></thead>
@@ -97,7 +114,7 @@
         {% if c.kind == "fill_oscillogram_page" %}<div class="thumbs">{% for pic in c.pictures %}<img class="thumb {{ pic.layout }}" loading="lazy" src="/files/{{ pic.png }}" alt="그래프">{% endfor %}</div>{% endif %}
       </td>
       <td>{{ c.source.section or c.source.title or "" }}<br><strong>{% if c.kind == "fill_oscillogram_page" %}그래프 쪽 ({{ c.pictures|length }}장){% elif c.kind == "replace_picture" %}회로도 그림{% else %}{{ c.field }}{% endif %}</strong></td>
-      <td class="num">{% if c.kind == "fill_oscillogram_page" %}{{ c.hwp.page_no }}쪽{% if c.hwp.page_to_be_added %} (추가){% endif %}{% else %}표 {{ c.hwp.table }} · {{ c.hwp.address }}{% endif %}</td>
+      <td class="num">{% if c.kind == "fill_oscillogram_page" %}{% if c.hwp.page_to_be_added %}{{ c.hwp.anchor_page or c.hwp.page_no }}쪽 뒤 (추가){% else %}{{ c.hwp.page_no_before or c.hwp.page_no }}쪽{% endif %}{% else %}표 {{ c.hwp.table }} · {{ c.hwp.address }}{% endif %}</td>
       <td class="num">{{ c.before if c.before is defined else "" }}{% if c.kind == "replace_picture" and c.hwp.size_hwpunit %}{{ (c.hwp.size_hwpunit[0] / 283.46) | round(1) }}×{{ (c.hwp.size_hwpunit[1] / 283.46) | round(1) }} mm{% endif %}</td>
       <td class="num">{{ c.after_extracted if c.after_extracted is defined else "" }}{% if c.after_markup %}<br><span class="flag">{{ c.after_markup }}</span>{% endif %}
         {% if c.kind == "replace_picture" and c.target %}{{ c.target.width_mm }}×{{ c.target.height_mm }} mm · 배율 {{ (c.target.scale * 100) | round }}%{% if c.hwp.caption %} · {{ c.hwp.caption }}{% endif %}{% endif %}
@@ -123,6 +140,7 @@
   </tbody>
 </table>
 </div>
+{% endfor %}
 {% endfor %}
 
 {% if candidates.unmapped_regions %}

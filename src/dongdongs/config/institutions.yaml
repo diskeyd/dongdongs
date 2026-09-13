@@ -7,6 +7,14 @@
 # Supported watermark kinds: image_xobject. Other kinds are reported as
 # unsupported and never delete anything.
 
+# HWP report format. One report is filled from several test reports, one
+# section per test. A section starts on the page whose cell begins with
+# "N. name(code)" and runs to the page before the next section.
+report:
+  section_heading_pattern: "^(\\d{1,3})\\.\\s*(\\S.*)$"
+  # only a Latin code in brackets counts as a test code ("(TDload2)" yes, "(일반)" no)
+  section_code_pattern: "\\(([A-Za-z][A-Za-z0-9_]*)\\)\\s*$"
+
 institutions:
   KERI:
     detect:
@@ -37,6 +45,16 @@ institutions:
       ocg_names: ["ezPDF Watermark"]
 
     footer_band_pt: 770
+
+    sections:
+      # a page titled like this lists every test of the report: number, name(code), place, start page
+      index_title: "시험 결과"
+      code_pattern: "\\((TD\\w+)\\)"
+      min_entries: 2
+      # printed page numbers are PDF page numbers in these reports
+      page_offset: 0
+      # table-of-contents entries that follow the last test (its end = their page - 1)
+      end_titles: ["도면", "첨부", "안내문"]
 
     tables:
       known_sections: ["Supply circuit", "Load circuit", "Prospective TRV"]

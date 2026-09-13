@@ -66,7 +66,8 @@ def test_section_changes_update_fill_and_clear():
 
 def test_build_candidates_flags_manual_watermark_pages():
     result = build_candidates({"tables": [_pdf_table()]}, [], _inventory(), ["Supply circuit"], {5: "review_required"})
-    assert result["pairs"] == [{"pdf_page": 5, "hwp_table": 5, "method": "document_order", "label_similarity": 0.5}]
+    assert [{k: v for k, v in p.items() if k != "section"} for p in result["pairs"]] == [{"pdf_page": 5, "hwp_table": 5, "method": "document_order", "label_similarity": 0.5}]
+    assert result["mode"] == "whole" and result["scopes"][0]["key"] == "all"
     assert all("watermark_manual_required_on_source_page" in c["flags"] for c in result["changes"])
 
 

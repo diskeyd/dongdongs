@@ -23,7 +23,7 @@ import sys
 from pathlib import Path
 
 from . import __version__, gemini
-from .config import detect_institution, institution, load_config
+from .config import detect_institution, institution, load_config, report_rules
 from .environment import collect
 from .job import Job, create_job, open_job, read_json, write_json
 from .support import REPORT_DIR, RunLog, build_report_zip, latest_job, load_env_file, log_directory, project_root
@@ -56,13 +56,24 @@ def _rules(job: Job, args) -> tuple[str, dict]:
     return name, institution(config, name)
 
 
+def _report_rules(args) -> dict:
+    return report_rules(load_config(Path(args.config) if getattr(args, "config", None) else None))
+
+
+def _hwp_sections(inventory: dict, args) -> list[dict]:
+    from .hwp.inspector import test_sections
+
+    rules = _report_rules(args)
+    return test_sections(inventory, rules["section_heading_pattern"], rules["section_code_pattern"])
+
+
 def _rel(job: Job, path: Path) -> str:
     return path.resolve().relative_to(job.root).as_posix()
 
 
 # ---------------------------------------------------------------- commands
 def cmd_init(args) -> int:
-    job = create_job(Path(args.work_dir), Path(args.pdf), Path(args.hwp) if args.hwp else None, args.job_id)
+    job = create_job(Path(args.work_dir), Path(args.pdf), Path(args.hwp) if args.hwp else None, args.job_id, getattr(args, "parent_job", None))
     config = load_config(Path(args.config) if args.config else None)
     name = args.institution or detect_institution(job.pdf, config)
     job.update(institution=name)
@@ -153,9 +164,22 @@ def cmd_verify(args) -> int:
     after = Path(args.after or log["processed_hwp"])
     inv_before = build_inventory(export_xml(before, job.path("logs", "before.xml")), before.name)
     inv_after = build_inventory(export_xml(after, job.path("logs", "processed.xml")), after.name)
-    result = compare_hwp(inv_before, inv_after, log["changes"])
+    inv_before["sections"] = _hwp_sections(inv_before, args)
+    inv_after["sections"] = _hwp_sections(inv_after, args)
+    result = compare_hwp(inv_before, inv_after, log["changes"], log.get("copies"))
     write_json(job.path("verification_hwp.json"), result)
     job.record_step("verify-hwp", passed=result["passed"])
+    if result["passed"]:
+        from .ledger import compact_numbers, numbers_with_status, section_counts, update_ledger
+
+        _, ledger = update_ledger(job)
+        counts = section_counts(ledger)
+        if counts["total"]:
+            print(f"보고서 장부: 구역 {counts['total']}개 중 반영 {counts['done']} · 차단 {counts['blocked']} · 대기 {counts['pending']}")
+            if counts["blocked"]:
+                print(f"  차단 구역 {compact_numbers(numbers_with_status(ledger, 'blocked'))}: 그래프 쪽이 없어 그래프를 넣지 못했습니다. 한글에서 그 구역 끝에 Osc. 쪽 하나를 복사해 넣고 같은 성적서로 다시 실행하세요.")
+    else:
+        print("검증을 통과하지 못해 보고서 장부를 갱신하지 않았습니다. 이 결과 파일로 이어서 작업하지 마세요.")
     print(
         f"HWP 검증 {'통과' if result['passed'] else '실패'} · 구조 문제 {len(result['structure_problems'])} · 셀 크기 변화 {len(result['cell_size_changes'])} · "
         f"예상 밖 텍스트 변화 {len(result['unexpected_text_changes'])} · 반영값 불일치 {len(result['applied_values_not_found'])} · 그림 문제 {len(result['picture_problems'])}"
@@ -182,6 +206,15 @@ def cmd_extract(args) -> int:
     for table in extracted["tables"]:
         table["source"]["pdf"] = job.pdf.name
     write_json(job.path("extracted_values.json"), extracted)
+
+    from .pdf.sections import read_test_index
+
+    index = read_test_index(pdf, rules.get("sections"))
+    write_json(job.path("sections.json"), index)
+    if index["found"]:
+        print(f"시험 항목 {len(index['sections'])}개 (목록 {index['index_page']}쪽): " + ", ".join(f"{t['code'] or t['name']} p{t['page_from']}-{t['page_to']}" for t in index["sections"]))
+    else:
+        print("시험 항목 목록을 찾지 못했습니다. 보고서 구역은 검수 전에 직접 고릅니다 (--sections).")
 
     report_path = job.path("watermark_report.json")
     status = {p["page"]: p["status"] for p in read_json(report_path)["pages"]} if report_path.is_file() else {}
@@ -210,9 +243,10 @@ def cmd_inspect_hwp(args) -> int:
         raise SystemExit("이 작업에는 HWP가 지정되지 않았습니다 (init --hwp).")
     _, rules = _rules(job, args)
     inventory = build_inventory(export_xml(job.hwp, job.path("logs", "hwp_structure.xml")), job.hwp.name)
+    inventory["sections"] = _hwp_sections(inventory, args)
     write_json(job.path("hwp_inventory.json"), inventory)
     job.record_step("inspect-hwp", tables=inventory["table_count"], pictures=inventory["picture_count"])
-    print(f"HWP 표 {inventory['table_count']} · 그림 {inventory['picture_count']} · 셀 {inventory['cell_count']}")
+    print(f"HWP 표 {inventory['table_count']} · 그림 {inventory['picture_count']} · 셀 {inventory['cell_count']} · 시험 구역 {len(inventory['sections'])}")
     for section in rules["tables"]["known_sections"]:
         print(f"  '{section}' 머리 셀이 있는 표: {[t['index'] for t in tables_with_cell(inventory, section)]}")
     return 0
@@ -230,7 +264,13 @@ def cmd_map(args) -> int:
     inventory = read_json(job.path("hwp_inventory.json"))
     report_path = job.path("watermark_report.json")
     status = {p["page"]: p["status"] for p in read_json(report_path)["pages"]} if report_path.is_file() else {}
-    candidates = build_candidates(extracted, regions, inventory, rules["tables"]["known_sections"], status, rules.get("pictures"))
+    index_path = job.path("sections.json")
+    pdf_index = read_json(index_path) if index_path.is_file() else None
+    hwp_sections = inventory.get("sections")
+    if hwp_sections is None:
+        hwp_sections = _hwp_sections(inventory, args)
+    manual = _pages(getattr(args, "sections", None))
+    candidates = build_candidates(extracted, regions, inventory, rules["tables"]["known_sections"], status, rules.get("pictures"), pdf_index, hwp_sections, manual)
     pdf = job.cleaned_pdf if job.cleaned_pdf.is_file() else job.pdf
     for change in candidates["changes"]:
         source = change["source"]
@@ -250,8 +290,12 @@ def cmd_map(args) -> int:
     candidates.update(job_id=job.manifest()["job_id"], created_at=now_kst(), institution=name, pdf=job.pdf.name, hwp=job.hwp.name if job.hwp else None)
     write_json(job.path("mapping_candidates.json"), candidates)
     changed = sum(1 for c in candidates["changes"] if not c.get("no_op"))
-    job.record_step("map", changes=len(candidates["changes"]), effective=changed, warnings=len(candidates["warnings"]))
+    job.record_step("map", changes=len(candidates["changes"]), effective=changed, warnings=len(candidates["warnings"]), mode=candidates["mode"], sections=[s["no"] for s in candidates["scopes"]])
     print(f"후보 {len(candidates['changes'])}건 (실제 변경 {changed}) · 경고 {len(candidates['warnings'])} · 미대응 그래프 {len(candidates['unmapped_regions'])}")
+    how = {"auto": "성적서 목록으로 자동", "user": "사람이 지정", "whole": "구역 구분 없이 문서 전체"}[candidates["mode"]]
+    print(f"대응 구역 ({how}): " + (", ".join(f"{s['no']}. {s['title']}" for s in candidates["scopes"]) or "없음"))
+    if candidates["pending_sections"]:
+        print(f"이 성적서에 없는 보고서 구역 {len(candidates['pending_sections'])}개는 손대지 않습니다.")
     for warning in candidates["warnings"]:
         print("  경고:", warning)
     return 0
@@ -351,6 +395,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--institution")
     p.add_argument("--config")
     p.add_argument("--check-gemini", action="store_true", help="Gemini 연결 확인 (키 값은 기록하지 않음)")
+    p.add_argument("--parent-job", help="이전 작업 이름 (--hwp 가 그 작업의 결과 파일일 때)")
     p.set_defaults(func=cmd_init)
 
     job_parser("inspect-pdf", cmd_inspect_pdf, "PDF 객체 구조 조사")
@@ -361,6 +406,8 @@ def build_parser() -> argparse.ArgumentParser:
         p.add_argument("--verify-dpi", type=int, default=150)
         p.add_argument("--pages", help="검증·추출 페이지 (예: 3,5,8-10)")
         p.add_argument("--skip-verify", action="store_true")
+        if name == "analyze":
+            p.add_argument("--sections", help="이 성적서가 채울 보고서 구역 번호 (예: 2,3 또는 10-12). 기본: 성적서 목록으로 자동")
 
     p = job_parser("verify", cmd_verify, "검증 (clean: PDF 무변형 / hwp: 반영 결과)")
     p.add_argument("--stage", choices=("clean", "hwp"), required=True)
@@ -378,6 +425,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = job_parser("map", cmd_map, "HWP 셀·그림 대응 후보 생성")
     p.add_argument("--use-gemini", action="store_true")
+    p.add_argument("--sections", help="이 성적서가 채울 보고서 구역 번호 (예: 2,3 또는 10-12). 기본: 성적서 목록으로 자동")
 
     p = job_parser("review", cmd_review, "127.0.0.1 검수 화면")
     p.add_argument("--port", type=int, default=8765)

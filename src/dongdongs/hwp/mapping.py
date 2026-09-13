@@ -302,10 +302,10 @@ def section_changes(pdf_table: dict, hwp_table: dict, block: dict, inventory: di
     return changes, warnings
 
 
-def picture_changes(regions: list[dict], inventory: dict, watermark_pages: dict[int, str], anchor_text: str = "Circuit components") -> tuple[list[dict], list[str]]:
+def picture_changes(regions: list[dict], inventory: dict, watermark_pages: dict[int, str], anchor_text: str = "Circuit components", pages=None) -> tuple[list[dict], list[str]]:
     warnings: list[str] = []
     diagrams = sorted((r for r in regions if r["kind"] == "circuit_diagram" and r.get("png")), key=lambda r: r["page"])
-    tables = tables_with_cell(inventory, anchor_text)
+    tables = tables_with_cell(inventory, anchor_text, pages)
     if len(diagrams) != len(tables):
         warnings.append(f"{len(diagrams)} circuit diagrams in the PDF but {len(tables)} '{anchor_text}' tables in the HWP; pictures not paired")
         return [], warnings
@@ -412,7 +412,7 @@ def _graph_rows(regions: list[dict]) -> list[list[dict]]:
     return rows
 
 
-def plan_oscillogram_pages(regions: list[dict], inventory: dict, cfg: dict, watermark_pages: dict[int, str] | None = None) -> tuple[list[dict], list[str]]:
+def plan_oscillogram_pages(regions: list[dict], inventory: dict, cfg: dict, watermark_pages: dict[int, str] | None = None, pages=None) -> tuple[list[dict], list[str]]:
     """One candidate per PDF graph page: the HWP page to fill, the title and every graph's target size."""
     cfg = cfg or {}
     watermark_pages = watermark_pages or {}
@@ -423,21 +423,32 @@ def plan_oscillogram_pages(regions: list[dict], inventory: dict, cfg: dict, wate
             by_page.setdefault(region["page"], []).append(region)
     # only PDF pages titled like a graph page; the rest may belong to oscillogram slot tables
     pdf_pages = sorted(p for p, group in by_page.items() if any(title_pattern.match(r.get("title") or "") for r in group))
-    hwp_pages = sorted(oscillogram_pages(inventory, title_pattern.pattern), key=lambda p: p["page_no"])
+    hwp_pages = sorted(oscillogram_pages(inventory, title_pattern.pattern, pages=pages), key=lambda p: p["page_no"])
     warnings: list[str] = []
     if not pdf_pages:
         return [], warnings
+    template = None
     if not hwp_pages:
-        return [], [f"{len(pdf_pages)} graph pages in the PDF but no page with an 'Osc.' title in the HWP; graph pages not planned"]
-    if len(pdf_pages) > len(hwp_pages):
-        warnings.append(f"{len(pdf_pages)} graph pages in the PDF, {len(hwp_pages)} in the HWP: {len(pdf_pages) - len(hwp_pages)} pages will be added by copying the last graph page")
+        if pages is None:
+            return [], [f"{len(pdf_pages)} graph pages in the PDF but no page with an 'Osc.' title in the HWP; graph pages not planned"]
+        # the section has no graph page to fill or copy: plan with another section's page as size model, blocked
+        template = next(iter(sorted(oscillogram_pages(inventory, title_pattern.pattern), key=lambda p: p["page_no"])), None)
+        if template is None:
+            return [], [f"{len(pdf_pages)} graph pages in the PDF but no page with an 'Osc.' title anywhere in the HWP; graph pages not planned"]
+        warnings.append(
+            f"{len(pdf_pages)} graph pages in the PDF but this section has no 'Osc.' page in the HWP; "
+            "copy one 'Osc.' page to the end of the section in Hancom and run again (candidates blocked)"
+        )
+    elif len(pdf_pages) > len(hwp_pages):
+        warnings.append(f"{len(pdf_pages)} graph pages in the PDF, {len(hwp_pages)} in the HWP: {len(pdf_pages) - len(hwp_pages)} pages will be added by copying the last graph page of the section")
     elif len(pdf_pages) < len(hwp_pages):
         warnings.append(f"{len(pdf_pages)} graph pages in the PDF, {len(hwp_pages)} in the HWP: the last {len(hwp_pages) - len(pdf_pages)} HWP graph pages keep their old content")
     inner = float(cfg.get("inner_width_mm", 168.8))
     gap = float(cfg.get("gap_mm", 1.5))
     reserved = float(cfg.get("reserved_height_mm", 14.0)) + float(cfg.get("padding_height_mm", 1.0))
     changes = []
-    last = hwp_pages[-1]
+    last = hwp_pages[-1] if hwp_pages else template
+    anchor_page = max(pages) if template else last["page_no"]
     for index, page in enumerate(pdf_pages):
         page_regions = by_page[page]
         title = next((r["title"] for r in page_regions if r.get("title")), None)
@@ -463,6 +474,8 @@ def plan_oscillogram_pages(regions: list[dict], inventory: dict, cfg: dict, wate
         flags = []
         if added:
             flags.append("page_to_be_added")
+        if template is not None:
+            flags.append("no_graph_page_in_section")
         if page_scale < SMALL_FILL_RATIO:
             flags.append("picture_small_in_box")
         if title is None:
@@ -474,8 +487,10 @@ def plan_oscillogram_pages(regions: list[dict], inventory: dict, cfg: dict, wate
                 "id": f"p{page}-graph-page",
                 "kind": "fill_oscillogram_page",
                 "hwp": {
-                    "table": target["table"],
-                    "page_no": target["page_no"] + added,
+                    "table": None if template is not None else target["table"],
+                    "page_no": (anchor_page if added else target["page_no"]) + added,
+                    "page_no_before": anchor_page if added else target["page_no"],
+                    "anchor_page": anchor_page if added else None,
                     "row": target["row"],
                     "col": target["col"],
                     "address": cell_address(target["row"], target["col"]),
@@ -499,11 +514,45 @@ def plan_oscillogram_pages(regions: list[dict], inventory: dict, cfg: dict, wate
                 "pictures": pictures,
                 "source": {"pdf_page": page, "title": title, "graphs": len(page_regions), "rows": len(rows), "watermark_status": wm},
                 "flags": flags,
-                "status": "blocked" if wm == "review_required" else "review_required",
-                "no_op": False,
+                "status": "blocked" if wm == "review_required" or template is not None else "review_required",
+                # the page already carries this title and as many pictures as planned: applied before
+                "no_op": not added and template is None and norm(target["title"]) == norm(title or "") and len(target["pictures"]) == len(pictures),
             }
         )
     return changes, warnings
+
+
+def anchor_page_of(change: dict) -> int:
+    hwp = change["hwp"]
+    return hwp.get("anchor_page") or (hwp.get("page_no", 0) - (hwp.get("copies_after_anchor") or 1))
+
+
+def graph_page_positions(changes: list[dict], copies: dict[int, int] | None = None) -> tuple[dict[str, int], dict[int, int]]:
+    """Page number of each graph-page change in the document after apply, and copies per anchor page.
+
+    Copies are inserted right after their section's last graph page, so every
+    later page moves down by the copies made before it. Copies of one anchor
+    are filled in ``copies_after_anchor`` order. ``copies`` (anchor page ->
+    count, from the apply log) overrides the count derived from ``changes``.
+    """
+    groups: dict[int, list[dict]] = {}
+    for change in changes:
+        if change.get("kind") == "fill_oscillogram_page" and change["hwp"].get("page_to_be_added") and change.get("status") != "blocked":
+            groups.setdefault(anchor_page_of(change), []).append(change)
+    counts = dict(copies) if copies is not None else {page: len(group) for page, group in groups.items()}
+
+    def shift(page: int) -> int:
+        return sum(n for anchor, n in counts.items() if anchor < page)
+
+    positions: dict[str, int] = {}
+    for anchor, group in groups.items():
+        for rank, change in enumerate(sorted(group, key=lambda c: c["hwp"].get("copies_after_anchor") or 0), start=1):
+            positions[change["id"]] = anchor + rank + shift(anchor)
+    for change in changes:
+        if change.get("kind") == "fill_oscillogram_page" and not change["hwp"].get("page_to_be_added") and change.get("status") != "blocked":
+            before = change["hwp"].get("page_no_before") or change["hwp"]["page_no"]
+            positions[change["id"]] = before + shift(before)
+    return positions, counts
 
 
 def plan_picture_slots(regions: list[dict], slots: list[dict], watermark_pages: dict[int, str], used_pngs: set[str]) -> tuple[list[dict], list[str]]:
@@ -552,9 +601,84 @@ def plan_picture_slots(regions: list[dict], slots: list[dict], watermark_pages: 
     return changes, warnings
 
 
-def build_candidates(extracted: dict, regions: list[dict], inventory: dict, sections: list[str], watermark_pages: dict[int, str], pictures_cfg: dict | None = None) -> dict:
-    hwp_tables = section_tables(inventory, sections)
-    pdf_tables = [t for t in extracted["tables"] if t["known_section"]]
+def pair_sections(pdf_sections: list[dict], hwp_sections: list[dict]) -> tuple[list[dict], list[str]]:
+    """Pair the tests of one PDF with report sections: same code first, then the same name."""
+    pairs, warnings, used = [], [], set()
+    for test in pdf_sections:
+        match, method = None, None
+        if test.get("code"):
+            match = next((h for h in hwp_sections if h["no"] not in used and h.get("code") and key(h["code"]) == key(test["code"])), None)
+            method = "code" if match else None
+        if match is None:
+            match = next((h for h in hwp_sections if h["no"] not in used and key(h["name"]) == key(test["name"])), None)
+            method = "name" if match else None
+        if match is None:
+            warnings.append(f"PDF test {test['title']!r} (p{test['page_from']}-{test['page_to']}) has no report section with the same code or name; not mapped")
+            continue
+        used.add(match["no"])
+        pairs.append({"pdf": test, "hwp": match, "method": method})
+    return pairs, warnings
+
+
+def _range(section: dict) -> list[int]:
+    return [section["page_from"], section["page_to"]]
+
+
+def _page_set(ranges) -> set[int] | None:
+    if ranges is None:
+        return None
+    return {page for a, b in ranges for page in range(a, b + 1)}
+
+
+def resolve_scopes(pdf_index: dict | None, hwp_sections: list[dict], manual: list[int] | None = None) -> tuple[list[dict], list[str], str]:
+    """Which PDF pages go to which report pages.
+
+    ``auto``: the PDF lists its tests and they pair with report sections.
+    ``user``: the reviewer named the report sections (other institutions).
+    ``whole``: no section information; the whole PDF against the whole report.
+    """
+    pdf_sections = (pdf_index or {}).get("sections") or []
+    warnings: list[str] = []
+    if manual:
+        chosen = [h for h in hwp_sections if h["no"] in manual]
+        missing = sorted(set(manual) - {h["no"] for h in chosen})
+        if missing:
+            warnings.append(f"report sections {missing} do not exist; ignored")
+        if not chosen:
+            return [], warnings + ["no report section chosen; nothing mapped"], "user"
+        if pdf_sections and len(pdf_sections) == len(chosen):
+            scopes = [
+                {"key": f"s{h['no']}", "method": "user_order", "no": h["no"], "code": h.get("code"), "title": h["title"], "pdf_ranges": [_range(t)], "hwp_ranges": [_range(h)]}
+                for t, h in zip(pdf_sections, chosen)
+            ]
+            return scopes, warnings, "user"
+        scope = {
+            "key": "s" + "-".join(str(h["no"]) for h in chosen),
+            "method": "user",
+            "no": ",".join(str(h["no"]) for h in chosen),
+            "code": None,
+            "title": " / ".join(h["title"] for h in chosen),
+            "pdf_ranges": None,
+            "hwp_ranges": [_range(h) for h in chosen],
+        }
+        return [scope], warnings, "user"
+    if pdf_sections and hwp_sections:
+        pairs, warnings = pair_sections(pdf_sections, hwp_sections)
+        scopes = [
+            {"key": f"s{p['hwp']['no']}", "method": p["method"], "no": p["hwp"]["no"], "code": p["hwp"].get("code"), "title": p["hwp"]["title"], "pdf_title": p["pdf"]["title"], "pdf_ranges": [_range(p["pdf"])], "hwp_ranges": [_range(p["hwp"])]}
+            for p in pairs
+        ]
+        return scopes, warnings, "auto"
+    if hwp_sections:
+        warnings.append(
+            f"the report has {len(hwp_sections)} test sections but the PDF test list was not found; the whole PDF was mapped against the whole report. "
+            "If this test report fills only some sections, choose them (--sections)"
+        )
+    whole = {"key": "all", "method": "whole", "no": None, "code": None, "title": "문서 전체", "pdf_ranges": None, "hwp_ranges": None}
+    return [whole], warnings, "whole"
+
+
+def _table_candidates(pdf_tables: list[dict], hwp_tables: list[dict], inventory: dict, sections: list[str], watermark_pages: dict[int, str]) -> tuple[list[dict], list[dict], list[str]]:
     pairs = pair_pages(pdf_tables, hwp_tables, sections)
     table_by_index = {t["index"]: t for t in inventory["tables"]}
     changes: list[dict] = []
@@ -589,23 +713,94 @@ def build_candidates(extracted: dict, regions: list[dict], inventory: dict, sect
                 changes.extend(got)
                 warnings.extend(notes)
                 warnings.append(f"p{pair['pdf_page']}: section {section!r} is in HWP table {pair['hwp_table']} but not on the PDF page; clearing candidates proposed")
+    return pairs, changes, warnings
+
+
+def build_candidates(
+    extracted: dict,
+    regions: list[dict],
+    inventory: dict,
+    sections: list[str],
+    watermark_pages: dict[int, str],
+    pictures_cfg: dict | None = None,
+    pdf_index: dict | None = None,
+    hwp_sections: list[dict] | None = None,
+    manual_sections: list[int] | None = None,
+) -> dict:
+    """Candidates for one PDF, matched section by section.
+
+    ``sections`` are the known table section names (Supply circuit, ...);
+    ``pdf_index`` / ``hwp_sections`` are the test sections of the PDF and of the
+    report. Report sections this PDF does not cover are never touched.
+    """
     pictures_cfg = pictures_cfg or {}
-    picture, picture_notes = picture_changes(regions, inventory, watermark_pages, pictures_cfg.get("circuit_anchor", "Circuit components"))
-    changes.extend(picture)
-    warnings.extend(picture_notes)
-    pages_planned, page_notes = plan_oscillogram_pages(regions, inventory, pictures_cfg.get("oscillogram_page", {}), watermark_pages)
-    changes.extend(pages_planned)
-    warnings.extend(page_notes)
-    planned = {(pic["png"]) for change in pages_planned for pic in change["pictures"]}
-    slots = picture_slots(inventory, pictures_cfg.get("oscillogram_slots", {}).get("header_text", "오실로그램"))
-    slot_changes, slot_notes = plan_picture_slots(regions, slots, watermark_pages, planned)
-    changes.extend(slot_changes)
-    warnings.extend(slot_notes)
-    planned |= {c["after_png"] for c in slot_changes}
-    unmapped = [r for r in regions if r.get("export") and r["kind"] != "circuit_diagram" and r.get("png") not in planned]
+    hwp_sections = hwp_sections or []
+    scopes, warnings, mode = resolve_scopes(pdf_index, hwp_sections, manual_sections)
+    all_pdf_tables = [t for t in extracted["tables"] if t["known_section"]]
+    all_hwp_tables = section_tables(inventory, sections)
+    pairs: list[dict] = []
+    changes: list[dict] = []
+    used_pngs: set[str] = set()
+    for scope in scopes:
+        pdf_pages, hwp_pages = _page_set(scope["pdf_ranges"]), _page_set(scope["hwp_ranges"])
+        label = f"[{scope['no']}. {scope['title']}] " if scope["no"] is not None else ""
+        tag = {k: scope[k] for k in ("key", "method", "no", "code", "title", "pdf_ranges", "hwp_ranges")}
+        scope_regions = [r for r in regions if pdf_pages is None or r["page"] in pdf_pages]
+        pdf_tables = [t for t in all_pdf_tables if pdf_pages is None or t["source"]["pdf_page"] in pdf_pages]
+        hwp_tables = [t for t in all_hwp_tables if hwp_pages is None or t.get("page_no") in hwp_pages]
+        found: list[dict] = []
+        notes: list[str] = []
+        if pdf_tables:
+            got_pairs, got, got_notes = _table_candidates(pdf_tables, hwp_tables, inventory, sections, watermark_pages)
+            pairs.extend({**pair, "section": scope["key"]} for pair in got_pairs)
+            found += got
+            notes += got_notes
+        got, got_notes = picture_changes(scope_regions, inventory, watermark_pages, pictures_cfg.get("circuit_anchor", "Circuit components"), hwp_pages)
+        found += got
+        notes += got_notes
+        planned_pages, got_notes = plan_oscillogram_pages(scope_regions, inventory, pictures_cfg.get("oscillogram_page", {}), watermark_pages, hwp_pages)
+        found += planned_pages
+        notes += got_notes
+        scope_used = {pic["png"] for change in planned_pages for pic in change["pictures"]} | {c["after_png"] for c in found if c.get("after_png")}
+        slots = picture_slots(inventory, pictures_cfg.get("oscillogram_slots", {}).get("header_text", "오실로그램"), hwp_pages)
+        got, got_notes = plan_picture_slots(scope_regions, slots, watermark_pages, scope_used)
+        found += got
+        notes += got_notes
+        for change in found:
+            change["section"] = tag
+        used_pngs |= scope_used | {c["after_png"] for c in got}
+        changes += found
+        warnings += [label + note for note in notes]
+    positions, _ = graph_page_positions(changes)
+    for change in changes:
+        if change["kind"] == "fill_oscillogram_page":
+            change["hwp"]["page_no_after"] = positions.get(change["id"])
+            if change["id"] in positions:
+                change["hwp"]["page_no"] = positions[change["id"]]
+    covered = _page_set([r for scope in scopes for r in (scope["pdf_ranges"] or [])]) if all(s["pdf_ranges"] is not None for s in scopes) else None
+    unmapped = [r for r in regions if r.get("export") and r.get("png") and r["png"] not in used_pngs]
+    touched = {s["no"] for s in scopes if isinstance(s["no"], int)}
+    for scope in scopes:
+        if isinstance(scope["no"], str):
+            touched |= {int(n) for n in scope["no"].split(",")}
     return {
+        "mode": mode,
+        "scopes": scopes,
+        "hwp_sections": [{k: h[k] for k in ("no", "title", "code", "page_from", "page_to")} for h in hwp_sections],
+        "pending_sections": [h["no"] for h in hwp_sections if h["no"] not in touched],
+        "pdf_index": {k: v for k, v in (pdf_index or {}).items() if k != "sections"} | {"tests": len((pdf_index or {}).get("sections") or [])},
         "pairs": pairs,
         "changes": changes,
         "warnings": warnings,
-        "unmapped_regions": [{"page": r["page"], "index": r["index"], "kind": r["kind"], "title": r.get("title"), "png": r.get("png")} for r in unmapped],
+        "unmapped_regions": [
+            {
+                "page": r["page"],
+                "index": r["index"],
+                "kind": r["kind"],
+                "title": r.get("title"),
+                "png": r.get("png"),
+                "reason": "outside_matched_sections" if covered is not None and r["page"] not in covered else "not_matched",
+            }
+            for r in unmapped
+        ],
     }

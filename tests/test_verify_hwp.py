@@ -49,9 +49,9 @@ def _page_inventory(page_titles, pictures_per_page):
 def test_filled_and_added_graph_pages_pass_when_they_match_the_plan():
     before = _page_inventory(["Osc. A-1", "Osc. A-2"], [[], []])
     plan = [
-        {"kind": "fill_oscillogram_page", "apply_status": "applied", "after": "Osc. B-1", "hwp": {"table": 0, "page_no": 1, "row": 3, "col": 0, "existing_pictures": 0, "page_to_be_added": False},
+        {"id": "g1", "kind": "fill_oscillogram_page", "apply_status": "applied", "after": "Osc. B-1", "hwp": {"table": 0, "page_no": 1, "page_no_before": 1, "row": 3, "col": 0, "existing_pictures": 0, "page_to_be_added": False},
          "pictures": [{"width_hwpunit": 1000, "height_hwpunit": 500}, {"width_hwpunit": 490, "height_hwpunit": 500}, {"width_hwpunit": 490, "height_hwpunit": 500}]},
-        {"kind": "fill_oscillogram_page", "apply_status": "applied", "after": "Osc. B-3", "hwp": {"table": 1, "page_no": 3, "row": 3, "col": 0, "existing_pictures": 0, "page_to_be_added": True},
+        {"id": "g3", "kind": "fill_oscillogram_page", "apply_status": "applied", "after": "Osc. B-3", "hwp": {"table": 1, "page_no": 3, "page_no_before": 2, "anchor_page": 2, "copies_after_anchor": 1, "row": 3, "col": 0, "existing_pictures": 0, "page_to_be_added": True},
          "pictures": [{"width_hwpunit": 1000, "height_hwpunit": 700}]},
     ]
     after = _page_inventory(["Osc. B-1", "Osc. A-2", "Osc. B-3"], [[(1000, 500), (490, 500), (490, 500)], [], [(1000, 703)]])
@@ -74,8 +74,28 @@ def test_replaced_picture_must_change_data_and_keep_size():
 
 def test_pictures_after_an_inserted_page_are_matched_by_shifted_index():
     before = _page_inventory(["Osc. A-1", "photo page"], [[], [(800, 300)]])
-    plan = [{"kind": "fill_oscillogram_page", "apply_status": "applied", "after": "Osc. B-2", "hwp": {"table": 0, "page_no": 2, "row": 3, "col": 0, "existing_pictures": 0, "page_to_be_added": True},
+    plan = [{"id": "g2", "kind": "fill_oscillogram_page", "apply_status": "applied", "after": "Osc. B-2", "hwp": {"table": 0, "page_no": 2, "page_no_before": 1, "anchor_page": 1, "copies_after_anchor": 1, "row": 3, "col": 0, "existing_pictures": 0, "page_to_be_added": True},
              "pictures": [{"width_hwpunit": 1000, "height_hwpunit": 700}]}]
     after = _page_inventory(["Osc. A-1", "Osc. B-2", "photo page"], [[], [(1000, 700)], [(800, 300)]])
     result = compare_hwp(before, after, plan)
     assert result["passed"], result
+
+
+def _added(change_id, title, anchor_page, rank=1):
+    return {"id": change_id, "kind": "fill_oscillogram_page", "apply_status": "applied", "after": title,
+            "hwp": {"table": None, "page_no": 0, "page_no_before": anchor_page, "anchor_page": anchor_page, "copies_after_anchor": rank, "row": 3, "col": 0, "existing_pictures": 0, "page_to_be_added": True},
+            "pictures": [{"width_hwpunit": 1000, "height_hwpunit": 700}]}
+
+
+def test_each_section_gets_its_copies_right_after_its_own_last_graph_page():
+    # section 1 = pages 1-2, section 2 = pages 3-4; each section adds one graph page
+    before = _page_inventory(["Osc. A-1", "other 1", "Osc. C-1", "other 2"], [[], [(800, 300)], [], [(800, 300)]])
+    plan = [_added("s1", "Osc. B-1", 1), _added("s2", "Osc. D-1", 3)]
+    copies = [{"anchor": "Osc. A-1", "anchor_page": 1, "count": 1}, {"anchor": "Osc. C-1", "anchor_page": 3, "count": 1}]
+    good = _page_inventory(["Osc. A-1", "Osc. B-1", "other 1", "Osc. C-1", "Osc. D-1", "other 2"], [[], [(1000, 700)], [(800, 300)], [], [(1000, 700)], [(800, 300)]])
+    result = compare_hwp(before, good, plan, copies)
+    assert result["passed"], result
+    assert result["pages_added"] == [2, 5]
+    # both copies at the end of the document: wrong sections
+    wrong = _page_inventory(["Osc. A-1", "other 1", "Osc. C-1", "other 2", "Osc. B-1", "Osc. D-1"], [[], [(800, 300)], [], [(800, 300)], [(1000, 700)], [(1000, 700)]])
+    assert not compare_hwp(before, wrong, plan, copies)["passed"]

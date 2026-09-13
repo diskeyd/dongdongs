@@ -61,3 +61,21 @@ def test_server_binds_localhost_and_blocks_traversal(job):
     finally:
         server.shutdown()
         server.server_close()
+
+
+def test_page_groups_candidates_by_report_section(job):
+    from dongdongs.review.server import render_page
+
+    data = read_json(job.path("mapping_candidates.json"))
+    data.update(
+        mode="auto",
+        scopes=[{"key": "s2", "method": "code", "no": 2, "code": "TDb", "title": "시험B(TDb)", "pdf_ranges": [[5, 9]], "hwp_ranges": [[3, 4]]}],
+        hwp_sections=[{"no": n, "title": f"시험{n}", "code": None, "page_from": n, "page_to": n} for n in (1, 2, 3, 4, 5)],
+        pending_sections=[1, 3, 4, 5],
+    )
+    for change in data["changes"]:
+        change["section"] = {"key": "s2", "no": 2}
+    write_json(job.path("mapping_candidates.json"), data)
+    page = render_page(job)
+    assert "2. 시험B(TDb)" in page and "표 칸 1 · 그림 1" in page
+    assert "성적서가 아직 없는 구역 (손대지 않음): 1, 3–5" in page

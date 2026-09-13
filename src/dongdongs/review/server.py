@@ -37,18 +37,64 @@ def _optional(job: Job, name: str):
     return read_json(path) if path.is_file() else None
 
 
+def _scope_numbers(scope: dict) -> list[int]:
+    no = scope.get("no")
+    if isinstance(no, int):
+        return [no]
+    return [int(n) for n in str(no).split(",") if n.strip().isdigit()] if no else []
+
+
+def _section_groups(candidates: dict) -> list[dict]:
+    """Candidates by report section (in scope order), then by PDF page."""
+    by_key: dict[str, dict[int, list[dict]]] = {}
+    for change in candidates["changes"]:
+        key = (change.get("section") or {}).get("key", "all")
+        by_key.setdefault(key, {}).setdefault(change["source"].get("pdf_page", 0), []).append(change)
+    scopes = {s["key"]: s for s in candidates.get("scopes") or []}
+    order = [s["key"] for s in candidates.get("scopes") or []] + [k for k in by_key if k not in scopes]
+    groups = []
+    for key in order:
+        if key not in by_key:
+            continue
+        changes = [c for page in by_key[key].values() for c in page]
+        graph = [c for c in changes if c["kind"] == "fill_oscillogram_page"]
+        groups.append(
+            {
+                "scope": scopes.get(key) or {"key": key, "no": None, "title": "문서 전체"},
+                "pages": sorted(by_key[key].items()),
+                "counts": {
+                    "cells": sum(1 for c in changes if c["kind"] == "set_cell_text"),
+                    "pictures": sum(1 for c in changes if c["kind"] == "replace_picture"),
+                    "graph": len(graph),
+                    "added": sum(1 for c in graph if c["hwp"].get("page_to_be_added") and c.get("status") != "blocked"),
+                    "blocked": sum(1 for c in changes if c.get("status") == "blocked"),
+                },
+            }
+        )
+    return groups
+
+
 def render_page(job: Job) -> str:
     candidates = read_json(job.path("mapping_candidates.json"))
     saved = _optional(job, "approved_changes.json") or {"changes": []}
     watermark = _optional(job, "watermark_report.json")
     verification = _optional(job, "verification_clean.json")
-    pages: dict[int, list[dict]] = {}
-    for change in candidates["changes"]:
-        pages.setdefault(change["source"].get("pdf_page", 0), []).append(change)
+    groups = _section_groups(candidates)
+    ledger = None
+    if job.hwp is not None:
+        from ..ledger import ledger_path, load_ledger
+
+        ledger = load_ledger(ledger_path(job.root.parent, job.hwp))
+    from ..ledger import compact_numbers
+
+    this_job = {n for s in candidates.get("scopes") or [] for n in _scope_numbers(s)}
+    previous = sorted(int(no) for no, s in ((ledger or {}).get("sections") or {}).items() if s.get("status") in ("done", "blocked") and int(no) not in this_job)
     return _template().render(
         manifest=job.manifest(),
         candidates=candidates,
-        pages=sorted(pages.items()),
+        groups=groups,
+        pending_text=compact_numbers(set(candidates.get("pending_sections") or []) - set(previous)),
+        previous_text=compact_numbers(previous),
         decisions={c["id"]: c for c in saved["changes"]},
         watermark=watermark,
         verification=verification,

@@ -1,8 +1,9 @@
 """``dongdongs start``: the question-and-answer flow behind run.bat.
 
-Asks for the PDF, the HWP and a job name, then runs the same commands a
-developer would type: init → analyze → review → apply → verify. Nothing is
-written to the original files.
+Asks for the PDF, the HWP (or offers to continue a report from its previous
+result) and a job name, then runs the same commands a developer would type:
+init → analyze → (confirm sections) → review → apply → verify. Nothing is
+written to the original files. Run once per test report as they arrive.
 """
 
 from __future__ import annotations
@@ -12,6 +13,8 @@ import os
 import sys
 from pathlib import Path
 
+from .job import read_json
+from .ledger import compact_numbers, ledger_path, list_ledgers, load_ledger, numbers_with_status, section_counts, usable_latest
 from .support import project_root
 
 
@@ -57,19 +60,88 @@ def _serve_review(job_root: Path, port: int = 8765) -> None:
         server.server_close()
 
 
-def _yes(prompt: str) -> bool:
-    return input(f"{prompt} [y/N] ").strip().lower() == "y"
+def _yes(prompt: str, default: bool = False) -> bool:
+    answer = input(f"{prompt} {'[Y/n]' if default else '[y/N]'} ").strip().lower()
+    return default if not answer else answer == "y"
+
+
+def _ledger_line(ledger: dict) -> str:
+    counts = section_counts(ledger)
+    done = compact_numbers(numbers_with_status(ledger, "done") + numbers_with_status(ledger, "blocked"))
+    return f"구역 {counts['total']}개 중 반영 {counts['done']} · 차단 {counts['blocked']} · 대기 {counts['pending']}" + (f" (반영된 구역: {done})" if done else "")
+
+
+def choose_report(work: Path) -> tuple[Path | None, str | None]:
+    """Offer to continue a report from its newest result. Returns (hwp, parent job) or (None, None)."""
+    options = [(ledger, path) for _, ledger in list_ledgers(work) if (path := usable_latest(ledger, work)) is not None]
+    if not options:
+        return None, None
+    if len(options) == 1:
+        ledger, path = options[0]
+        print(f"  작업 중인 보고서: {ledger['report']} — {_ledger_line(ledger)}")
+        if _yes("  이 보고서의 이전 결과에 이어서 넣을까요? (새 보고서면 n)", default=True):
+            return path, ledger["latest"]["job"]
+        return None, None
+    print("  작업 중인 보고서:")
+    for number, (ledger, _) in enumerate(options, start=1):
+        print(f"    {number}) {ledger['report']} — {_ledger_line(ledger)}")
+    while True:
+        answer = input("  이어서 넣을 보고서 번호 (새 보고서면 그냥 Enter): ").strip()
+        if not answer:
+            return None, None
+        if answer.isdigit() and 1 <= int(answer) <= len(options):
+            ledger, path = options[int(answer) - 1]
+            return path, ledger["latest"]["job"]
+
+
+def confirm_sections(job: Path, argv_main, use_gemini: bool) -> None:
+    """Show which report sections this test report goes to; let the user name them when unknown or wrong."""
+    candidates = read_json(job / "mapping_candidates.json")
+    sections = candidates.get("hwp_sections") or []
+    if not sections:
+        return
+    chosen = ", ".join(f"{s['no']}. {s['title']}" for s in candidates["scopes"] if s["no"] is not None)
+    if candidates["mode"] == "auto":
+        print(f"\n성적서 목록에서 찾은 보고서 구역: {chosen}")
+        if _yes("이 구역들에 넣는 게 맞나요?", default=True):
+            return
+    else:
+        print(f"\n이 성적서의 시험 목록을 찾지 못했습니다. 보고서의 구역 {len(sections)}개:")
+    for section in sections:
+        print(f"  {section['no']:>3}. {section['title']}")
+    answer = input("이 성적서가 채울 구역 번호 (예: 2,3 또는 10-12 · 그냥 Enter면 지금 대응 그대로): ").strip()
+    if not answer:
+        return
+    argv_main(["map", "--job", str(job), "--sections", answer] + (["--use-gemini"] if use_gemini else []))
+
+
+def closing_summary(job: Path, work: Path) -> None:
+    manifest = read_json(job / "manifest.json")
+    hwp = (manifest.get("inputs") or {}).get("hwp")
+    ledger = load_ledger(ledger_path(work, Path(hwp["path"]))) if hwp else None
+    if not ledger:
+        return
+    print(f"\n보고서 {ledger['report']}: {_ledger_line(ledger)}")
+    pending = numbers_with_status(ledger, "pending")
+    if pending:
+        print(f"  아직 성적서가 없는 구역: {compact_numbers(pending)}")
+        print("  다음 성적서가 오면 run.bat 을 다시 실행하고 '이전 결과에 이어서 넣을까요?' 에 Enter(Y) 를 누르세요.")
+    else:
+        print("  모든 구역이 채워졌습니다.")
 
 
 def run(argv_main) -> int:
     """argv_main: the CLI ``main`` function, reused for every step."""
     root = project_root()
+    work = root / "work"
     print("dongdongs 시작 — 질문에 답하면 나머지는 자동으로 진행합니다. 원본 파일은 바꾸지 않습니다.")
+    print("성적서가 올 때마다 한 번씩 실행합니다. 같은 보고서는 이전 결과에 이어서 쌓입니다.")
     pdf = _ask_file("1) 시험성적서 PDF 파일", (".pdf",))
-    hwp = _ask_file("2) 보고서 HWP 파일", (".hwp",), optional=True)
+    hwp, parent = choose_report(work)
+    if hwp is None:
+        hwp = _ask_file("2) 보고서 HWP 파일 (처음 넣는 보고서는 원본)", (".hwp",), optional=True)
     default_id = f"{dt.datetime.now():%Y%m%d-%H%M}"
     job_id = _ask("3) 작업 이름", default_id)
-    work = root / "work"
     if (work / job_id).exists() and any((work / job_id).iterdir()):
         print(f"  work/{job_id} 가 이미 있습니다. 다른 이름을 쓰세요.")
         return 1
@@ -77,19 +149,21 @@ def run(argv_main) -> int:
     args = ["init", "--pdf", str(pdf), "--work-dir", str(work), "--job-id", job_id]
     if hwp:
         args += ["--hwp", str(hwp)]
+    if parent:
+        args += ["--parent-job", parent]
     if argv_main(args):
         return 1
     job = str(work / job_id)
+    use_gemini = bool(os.environ.get("GEMINI_API_KEY"))
     print("\n분석을 시작합니다 (워터마크 삭제 → 검증 → 표·그래프 추출 → HWP 조사 → 후보). 몇 분 걸립니다.")
-    analyze = ["analyze", "--job", job]
-    if os.environ.get("GEMINI_API_KEY"):
-        analyze.append("--use-gemini")
+    analyze = ["analyze", "--job", job] + (["--use-gemini"] if use_gemini else [])
     if argv_main(analyze):
         print("분석이 중간에 멈췄습니다. 화면의 메시지를 보고 report.bat 으로 보고서를 만들어 주세요.")
         return 1
     if not hwp:
         print(f"\nHWP 를 지정하지 않아 여기서 끝냅니다. 추출 결과: {job}")
         return 0
+    confirm_sections(Path(job), argv_main, use_gemini)
     print("\n검수 화면을 엽니다. 브라우저에서 승인·수정 후 [저장] 을 누르고, 이 창으로 돌아와 Enter 를 누르세요.")
     _serve_review(Path(job))
     approved = Path(job) / "approved_changes.json"
@@ -106,5 +180,6 @@ def run(argv_main) -> int:
     if argv_main(["apply", "--job", job, "--yes", "--visible"]):
         return 1
     argv_main(["verify", "--job", job, "--stage", "hwp"])
-    print(f"\n결과 파일: {Path(job) / 'result'} 안의 *.processed.hwp (원본 사본은 *.before.hwp)")
+    print(f"\n결과 파일: {Path(job) / 'result'} 안의 *.processed.hwp (반영 전 사본은 *.before.hwp)")
+    closing_summary(Path(job), work)
     return 0

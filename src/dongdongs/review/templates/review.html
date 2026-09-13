@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>검수 · {{ manifest.job_id }}</title>
+<style>
+  :root { --fg:#1d1d1f; --muted:#6e6e73; --line:#d9d9de; --bg:#fafafa; --card:#fff; --ok:#1f7a3a; --warn:#9a5b00; --bad:#b3261e; --accent:#0b57d0; }
+  * { box-sizing: border-box; }
+  body { margin:0; padding:16px 24px 96px; font:14px/1.45 -apple-system, "Segoe UI", "Malgun Gothic", sans-serif; color:var(--fg); background:var(--bg); }
+  h1 { font-size:20px; margin:0 0 4px; }
+  h2 { font-size:16px; margin:28px 0 8px; }
+  .meta { color:var(--muted); margin-bottom:12px; }
+  .banner { border:1px solid var(--line); background:var(--card); border-radius:8px; padding:10px 14px; margin:8px 0; }
+  .banner.ok { border-left:4px solid var(--ok); } .banner.warn { border-left:4px solid var(--warn); } .banner.bad { border-left:4px solid var(--bad); }
+  .wrap { overflow-x:auto; }
+  table { border-collapse:collapse; width:100%; background:var(--card); }
+  th, td { border:1px solid var(--line); padding:6px 8px; vertical-align:top; text-align:left; }
+  th { background:#f0f0f3; font-weight:600; white-space:nowrap; }
+  td.num { white-space:nowrap; font-family:ui-monospace, Consolas, monospace; }
+  img.crop { max-width:320px; max-height:90px; border:1px solid var(--line); background:#fff; }
+  img.region { max-width:420px; border:1px solid var(--line); background:#fff; }
+  input.after { width:100%; min-width:120px; font:inherit; padding:3px 5px; }
+  .flag { display:inline-block; font-size:11px; padding:1px 6px; margin:1px; border-radius:10px; background:#eef1f8; color:#334; }
+  .flag.warn { background:#fff1dd; color:var(--warn); } .flag.bad { background:#fde8e6; color:var(--bad); }
+  tr.noop td { color:var(--muted); }
+  tr.changed td.after-cell { background:#fffbe6; }
+  .bar { position:fixed; left:0; right:0; bottom:0; background:var(--card); border-top:1px solid var(--line); padding:10px 24px; display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+  button { font:inherit; padding:6px 14px; border-radius:6px; border:1px solid var(--line); background:#fff; cursor:pointer; }
+  button.primary { background:var(--accent); border-color:var(--accent); color:#fff; }
+  #status { color:var(--muted); }
+  details { margin:6px 0; }
+</style>
+</head>
+<body>
+<h1>시험성적서 → HWP 검수</h1>
+<div class="meta">
+  작업 {{ manifest.job_id }} · PDF {{ manifest.inputs.pdf.name }}{% if manifest.inputs.hwp %} · HWP {{ manifest.inputs.hwp.name }}{% endif %} · 기관 {{ manifest.institution or "미확인" }}
+  {% if saved_at %} · 마지막 저장 {{ saved_at }}{% endif %}
+</div>
+
+{% if watermark %}
+<div class="banner {{ 'ok' if watermark.overall == 'removed' else 'warn' }}">
+  <strong>워터마크</strong> {{ watermark.overall }} ·
+  {% for k, v in watermark.counts.items() %}{{ k }} {{ v }}{% if not loop.last %}, {% endif %}{% endfor %}
+  {% if watermark.counts.get('review_required') %} · 수동 처리 필요 페이지가 있습니다. 해당 페이지 이미지는 반영이 차단됩니다.{% endif %}
+</div>
+{% else %}
+<div class="banner bad"><strong>워터마크</strong> 제거 기록이 없습니다. clean 단계를 먼저 실행하세요.</div>
+{% endif %}
+
+{% if verification %}
+<div class="banner {{ 'ok' if verification.passed else 'bad' }}">
+  <strong>무변형 검증</strong> {{ "통과" if verification.passed else "실패" }} · {{ verification.pages_checked }}페이지 @{{ verification.dpi }}dpi ·
+  워터마크 영역 밖 픽셀 차이 {{ verification.pixel_diff_outside_wm }} · 푸터 {{ "유지" if verification.footer_present else "손상" }}
+</div>
+{% endif %}
+
+{% if candidates.warnings %}
+<div class="banner warn"><strong>경고 {{ candidates.warnings|length }}건</strong>
+  <details><summary>펼치기</summary><ul>{% for w in candidates.warnings %}<li>{{ w }}</li>{% endfor %}</ul></details>
+</div>
+{% endif %}
+
+<div class="banner">
+  <strong>페이지 대응</strong>
+  {% for p in candidates.pairs %}p{{ p.pdf_page }} → HWP 표 {{ p.hwp_table }} ({{ p.method }}, 라벨 유사도 {{ p.label_similarity }}){% if not loop.last %} · {% endif %}{% endfor %}
+</div>
+
+{% for page, changes in pages %}
+<h2>PDF {{ page }}쪽{% if changes and changes[0].source.printed_page %} ({{ changes[0].source.printed_page }}){% endif %}</h2>
+<div class="wrap">
+<table>
+  <thead><tr><th>근거</th><th>구역 · 항목</th><th>HWP 위치</th><th>HWP 현재값</th><th>추출값</th><th>반영값</th><th>표시</th><th>결정</th></tr></thead>
+  <tbody>
+  {% for c in changes %}
+    {% set saved = decisions.get(c.id) %}
+    {% set after = saved.after if saved else c.after %}
+    <tr data-id="{{ c.id }}" data-kind="{{ c.kind }}" class="{{ 'noop' if c.no_op else 'changed' }}">
+      <td>
+        {% if c.preview %}<img class="crop" src="/files/{{ c.preview }}" alt="원본 영역">{% endif %}
+        {% if c.after_png %}<img class="region" src="/files/{{ c.after_png }}" alt="회로도 PNG">{% endif %}
+      </td>
+      <td>{{ c.source.section or "" }}<br><strong>{{ c.field or c.kind }}</strong></td>
+      <td class="num">표 {{ c.hwp.table }} · {{ c.hwp.address }}</td>
+      <td class="num">{{ c.before if c.before is defined else "" }}</td>
+      <td class="num">{{ c.after_extracted if c.after_extracted is defined else "" }}{% if c.after_markup %}<br><span class="flag">{{ c.after_markup }}</span>{% endif %}</td>
+      <td class="after-cell">
+        {% if c.kind == "set_cell_text" %}<input class="after" value="{{ after }}">{% else %}그림 교체{% endif %}
+      </td>
+      <td>
+        {% for f in c.flags %}<span class="flag {{ 'bad' if 'watermark' in f or 'not_implemented' in f else 'warn' }}">{{ f }}</span>{% endfor %}
+        {% if c.status == "blocked" %}<span class="flag bad">blocked</span>{% endif %}
+      </td>
+      <td>
+        <select class="decision" {% if c.status == "blocked" %}disabled{% endif %}>
+          {% set current = saved.decision if saved else "hold" %}
+          <option value="hold" {% if current == "hold" %}selected{% endif %}>보류</option>
+          <option value="approve" {% if current == "approve" %}selected{% endif %}>승인</option>
+          <option value="reject" {% if current == "reject" %}selected{% endif %}>거절</option>
+        </select>
+      </td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endfor %}
+
+{% if candidates.unmapped_regions %}
+<h2>자동 대응하지 않은 그래프 {{ candidates.unmapped_regions|length }}개</h2>
+<details><summary>PNG 목록 펼치기</summary>
+  {% for r in candidates.unmapped_regions %}
+  <div class="banner">p{{ r.page }} · {{ r.kind }} · {{ r.title or "제목 없음" }}{% if r.png %}<br><img class="region" loading="lazy" src="/files/{{ r.png }}" alt="그래프 PNG">{% endif %}</div>
+  {% endfor %}
+</details>
+{% endif %}
+
+<div class="bar">
+  <label>검수자 <input id="reviewer" size="10"></label>
+  <button id="approve-noop">변경 없음 항목 모두 승인</button>
+  <button class="primary" id="save">저장</button>
+  <span id="status"></span>
+</div>
+
+<script>
+  const rows = () => Array.from(document.querySelectorAll("tr[data-id]"));
+  document.getElementById("approve-noop").addEventListener("click", () => {
+    rows().filter(r => r.classList.contains("noop")).forEach(r => { const s = r.querySelector("select.decision"); if (!s.disabled) s.value = "approve"; });
+  });
+  document.getElementById("save").addEventListener("click", async () => {
+    const decisions = {};
+    rows().forEach(r => {
+      const input = r.querySelector("input.after");
+      decisions[r.dataset.id] = { decision: r.querySelector("select.decision").value, after: input ? input.value : undefined };
+    });
+    const status = document.getElementById("status");
+    status.textContent = "저장 중…";
+    try {
+      const res = await fetch("/save", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ reviewer: document.getElementById("reviewer").value, decisions }) });
+      if (!res.ok) throw new Error(res.status);
+      const r = await res.json();
+      status.textContent = `저장됨 ${r.saved_at} · 승인 ${r.approved} · 거절 ${r.rejected} · 보류 ${r.held}`;
+    } catch (e) {
+      status.textContent = "저장 실패: " + e.message;
+    }
+  });
+</script>
+</body>
+</html>

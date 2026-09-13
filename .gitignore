@@ -1,0 +1,26 @@
+# inputs and client data never go into the repository
+*.hwp
+*.hwpx
+*.pdf
+*.PDF
+*.png
+*.jpg
+work/
+input/
+report/
+local/
+tests/local/
+
+# secrets
+.env
+
+# python / tooling
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+dist/
+build/
+*.egg-info/
+.DS_Store

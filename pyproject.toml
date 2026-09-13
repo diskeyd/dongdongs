@@ -1,0 +1,34 @@
+[project]
+name = "dongdongs"
+version = "0.1.0"
+description = "PDF test report to HWP report semi-automation: watermark-object removal, table and graph extraction, reviewed HWP edits"
+authors = [
+    { name = "diskeyd" }
+]
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "google-genai>=2.23.0",
+    "jinja2>=3.1.6",
+    "olefile>=0.47",
+    "pillow>=12.3.0",
+    "pyhwp>=0.1b15",
+    "pymupdf>=1.28.2",
+    "pywin32>=312 ; sys_platform == 'win32'",
+    "pyyaml>=6.0.3",
+    "six>=1.17.0",
+]
+
+[project.scripts]
+dongdongs = "dongdongs.cli:main"
+
+[build-system]
+requires = ["uv_build>=0.12.13,<0.13.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

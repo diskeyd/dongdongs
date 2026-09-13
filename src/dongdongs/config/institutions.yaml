@@ -1,0 +1,52 @@
+# Institution rules.
+#
+# Watermark rules describe independent PDF objects that may be deleted. A page
+# is changed only when every condition of a rule holds; anything else is left
+# untouched and reported as review_required (handoff sections 5.4 and 5.5).
+#
+# Supported watermark kinds: image_xobject. Other kinds are reported as
+# unsupported and never delete anything.
+
+institutions:
+  KERI:
+    detect:
+      text_any: ["KERI", "한국전기연구원", "Korea Electrotechnology Research Institute"]
+      min_pages: 1
+
+    watermarks:
+      - id: ezpdf-draft-image
+        kind: image_xobject
+        expected_text: DRAFT
+        image:
+          width: 521
+          height: 623
+          # sha256 of the decoded image bytes (pymupdf extract_image)
+          sha256: 14630924c360882ea575e35a1fe5c5df316d12502e4a6fca98b14a043b6385b5
+        draw:
+          # the draw block must sit after this comment in the content stream
+          after_marker: "%EZPDF-RestorePage"
+          # the block's ExtGState fill alpha (/ca) must be below this value
+          require_extgstate_alpha_below: 1.0
+        # the rule must match on at least this share of pages or nothing is removed
+        min_page_ratio: 0.9
+
+    protect:
+      # The optional content group named "ezPDF Watermark" holds the footer
+      # (page number "n of N" and document code). It is not a watermark.
+      ocg_names: ["ezPDF Watermark"]
+
+    footer_band_pt: 770
+
+    tables:
+      known_sections: ["Supply circuit", "Load circuit", "Prospective TRV"]
+
+    regions:
+      min_width_pt: 300
+      min_height_pt: 100
+      title_gap_pt: 22
+      kinds:
+        "시험회로도": circuit_diagram
+        "Osc.": oscillogram
+        "사진": photo
+      export_kinds: [circuit_diagram, oscillogram]
+      dpi: 300

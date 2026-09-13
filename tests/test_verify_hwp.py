@@ -30,5 +30,43 @@ def test_structure_change_fails():
     before, after = _inv(), _inv()
     after["tables"][0]["cells"][1]["width"] = 20
     after["picture_count"] = 1
+    after["pictures"].append({"index": 0, "bindata_id": 1, "width": 5, "height": 5, "container": None})
     result = compare_hwp(before, after, [])
     assert not result["passed"] and result["cell_size_changes"] and result["structure_problems"]
+
+
+def _page_inventory(page_titles, pictures_per_page):
+    """Top-level frame per page; big cell (3,0) holds the title; pictures anchored there."""
+    tables, pictures = [], []
+    for i, title in enumerate(page_titles):
+        cells = [{"row": r, "col": 0, "rowspan": 1, "colspan": 1, "width": 100, "height": 100, "text": ("\n" + title + "\n") if r == 3 else f"h{r}"} for r in range(4)]
+        tables.append({"index": i, "depth": 0, "page_no": i + 1, "frame": i, "rows": 4, "cols": 1, "cells": cells})
+        for w, h in pictures_per_page[i]:
+            pictures.append({"index": len(pictures), "bindata_id": 100 + len(pictures), "width": w, "height": h, "container": {"table": i, "row": 3, "col": 0}, "page_no": i + 1})
+    return {"table_count": len(tables), "picture_count": len(pictures), "tables": tables, "pictures": pictures}
+
+
+def test_filled_and_added_graph_pages_pass_when_they_match_the_plan():
+    before = _page_inventory(["Osc. A-1", "Osc. A-2"], [[], []])
+    plan = [
+        {"kind": "fill_oscillogram_page", "apply_status": "applied", "after": "Osc. B-1", "hwp": {"table": 0, "page_no": 1, "row": 3, "col": 0, "existing_pictures": 0, "page_to_be_added": False},
+         "pictures": [{"width_hwpunit": 1000, "height_hwpunit": 500}, {"width_hwpunit": 490, "height_hwpunit": 500}, {"width_hwpunit": 490, "height_hwpunit": 500}]},
+        {"kind": "fill_oscillogram_page", "apply_status": "applied", "after": "Osc. B-3", "hwp": {"table": 1, "page_no": 3, "row": 3, "col": 0, "existing_pictures": 0, "page_to_be_added": True},
+         "pictures": [{"width_hwpunit": 1000, "height_hwpunit": 700}]},
+    ]
+    after = _page_inventory(["Osc. B-1", "Osc. A-2", "Osc. B-3"], [[(1000, 500), (490, 500), (490, 500)], [], [(1000, 703)]])
+    result = compare_hwp(before, after, plan)
+    assert result["passed"], result
+    assert result["pages_added"] == [3]
+    wrong = _page_inventory(["Osc. B-1", "Osc. A-2", "Osc. B-3"], [[(1000, 500), (490, 500)], [], [(1000, 703)]])
+    assert not compare_hwp(before, wrong, plan)["passed"]
+
+
+def test_replaced_picture_must_change_data_and_keep_size():
+    before = _page_inventory(["x"], [[(800, 300)]])
+    change = {"kind": "replace_picture", "apply_status": "applied", "hwp": {"table": 0, "row": 3, "col": 0}, "target": {"width_hwpunit": 800, "height_hwpunit": 300}}
+    same = _page_inventory(["x"], [[(800, 300)]])
+    assert not compare_hwp(before, same, [change])["passed"]  # bindata unchanged
+    swapped = _page_inventory(["x"], [[(800, 302)]])
+    swapped["pictures"][0]["bindata_id"] = 999
+    assert compare_hwp(before, swapped, [change])["passed"]

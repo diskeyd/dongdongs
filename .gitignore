@@ -11,8 +11,13 @@ report/
 local/
 tests/local/
 
-# secrets
+# secrets and per-PC settings
 .env
+dongdongs.env
+
+# run logs and error-report zips
+logs/
+reports/
 
 # python / tooling
 .venv/

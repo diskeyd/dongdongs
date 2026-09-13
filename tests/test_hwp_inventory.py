@@ -27,3 +27,13 @@ def test_pictures_sit_in_first_cell_of_their_tables(inventory, expected):
     assert len(tables) == e["picture_tables"]
     first_cells = [p for p in inventory["pictures"] if p["container"] and p["container"]["table"] in tables and p["container"]["row"] == 0]
     assert len(first_cells) == e["picture_tables"]
+
+
+def test_pages_and_graph_pages(inventory, expected):
+    from dongdongs.hwp.inspector import oscillogram_pages
+
+    e = expected["hwp"]
+    assert inventory["page_count"] == e["page_count"]
+    pages = oscillogram_pages(inventory)
+    assert len(pages) == e["graph_pages"] and pages[0]["page_no"] == e["first_graph_page"]
+    assert all(p["row"] == 3 and p["col"] == 0 for p in pages)

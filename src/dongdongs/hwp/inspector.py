@@ -6,6 +6,7 @@ on Windows to check the result of ``apply`` against the original.
 
 from __future__ import annotations
 
+import re
 import subprocess
 import sys
 import xml.etree.ElementTree as ET
@@ -60,9 +61,16 @@ def build_inventory(xml_path: Path, source_name: str | None = None) -> dict:
         return depth, first
 
     table_entries = []
+    frame_of: dict[int, int] = {}
+    page_no = 0
     for i, table in enumerate(tables):
         body = table.find("TableBody")
         depth, container = enclosing(table)
+        if depth == 0:
+            page_no += 1
+            frame_of[i] = i
+        else:
+            frame_of[i] = frame_of[container["table"]]
         cells = []
         for row in body.findall("TableRow"):
             for cell in row.findall("TableCell"):
@@ -86,9 +94,14 @@ def build_inventory(xml_path: Path, source_name: str | None = None) -> dict:
                 "cols": int(body.get("cols")),
                 "width": int(table.get("width")),
                 "height": int(table.get("height")),
+                "frame": frame_of[i],
+                "page_no": page_no if depth == 0 else None,
                 "cells": cells,
             }
         )
+    page_of_frame = {t["index"]: t["page_no"] for t in table_entries if t["depth"] == 0}
+    for entry in table_entries:
+        entry["page_no"] = page_of_frame.get(entry["frame"])
 
     pictures = []
     for control in root.iter("GShapeObjectControl"):
@@ -102,8 +115,11 @@ def build_inventory(xml_path: Path, source_name: str | None = None) -> dict:
                 "bindata_id": int(info.get("bindata-id")),
                 "width": int(control.get("width")),
                 "height": int(control.get("height")),
+                "treat_as_char": (control.get("treat-as-char") == "1") if control.get("treat-as-char") is not None else None,
+                "flow": control.get("flow"),
                 "depth": depth,
                 "container": container,
+                "page_no": page_of_frame.get(frame_of[container["table"]]) if container else None,
             }
         )
 
@@ -116,6 +132,7 @@ def build_inventory(xml_path: Path, source_name: str | None = None) -> dict:
 
     return {
         "source": source_name or Path(xml_path).name,
+        "page_count": page_no,
         "table_count": len(table_entries),
         "picture_count": len(pictures),
         "cell_count": sum(len(t["cells"]) for t in table_entries),
@@ -142,6 +159,35 @@ def occurrence_of(inventory: dict, text: str, table: int, row: int, col: int) ->
             return count + 1
         count += hits
     return None
+
+
+def oscillogram_pages(inventory: dict, title_pattern: str = r"^Osc\. \S+$") -> list[dict]:
+    """Top-level page frames whose big cell holds a line matching ``title_pattern`` (the graph pages)."""
+    pattern = re.compile(title_pattern)
+    pages = []
+    for table in inventory["tables"]:
+        if table["depth"] != 0:
+            continue
+        for cell in table["cells"]:
+            lines = [line.strip() for line in cell["text"].split("\n")]
+            title = next((line for line in lines if pattern.match(line)), None)
+            if title is None:
+                continue
+            pictures = [p for p in inventory["pictures"] if p["container"] == {"table": table["index"], "row": cell["row"], "col": cell["col"]}]
+            pages.append(
+                {
+                    "table": table["index"],
+                    "page_no": table["page_no"],
+                    "row": cell["row"],
+                    "col": cell["col"],
+                    "title": title,
+                    "cell_width": cell["width"],
+                    "cell_height": cell["height"],
+                    "pictures": [p["index"] for p in pictures],
+                }
+            )
+            break
+    return pages
 
 
 def structure_signature(inventory: dict) -> dict:

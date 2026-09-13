@@ -31,8 +31,9 @@ institutions:
         min_page_ratio: 0.9
 
     protect:
-      # The optional content group named "ezPDF Watermark" holds the footer
-      # (page number "n of N" and document code). It is not a watermark.
+      # Footer layer. Despite its name, the optional content group
+      # "ezPDF Watermark" draws the page number "n of N", the document code
+      # and the address line. It is not the DRAFT stamp and is never removed.
       ocg_names: ["ezPDF Watermark"]
 
     footer_band_pt: 770
@@ -41,7 +42,8 @@ institutions:
       known_sections: ["Supply circuit", "Load circuit", "Prospective TRV"]
 
     regions:
-      min_width_pt: 300
+      # half-width graphs (two side by side under a full-width one) are ~240 pt wide
+      min_width_pt: 200
       min_height_pt: 100
       title_gap_pt: 22
       kinds:
@@ -50,3 +52,18 @@ institutions:
         "사진": photo
       export_kinds: [circuit_diagram, oscillogram]
       dpi: 300
+
+    pictures:
+      # header cell text of the table whose first cell holds the circuit diagram
+      circuit_anchor: "Circuit components"
+      # graph pages: one big cell per page with a title line and the graphs below it
+      oscillogram_page:
+        title_pattern: "^Osc\\. \\S+$"
+        # inside width of the big cell (cell width minus left/right padding), mm
+        inner_width_mm: 168.8
+        # space between the two half-width graphs, mm (slack so the pair never wraps)
+        gap_mm: 1.5
+        # title line, blank lines and paragraph spacing above the graphs, mm
+        reserved_height_mm: 14.0
+        # cell top/bottom padding, mm
+        padding_height_mm: 1.0

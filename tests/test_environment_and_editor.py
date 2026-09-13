@@ -34,3 +34,10 @@ def test_result_copies_never_overwrite(tmp_path):
     with pytest.raises(EditorError):
         prepare_result_copies(original, tmp_path / "result")
     assert original.read_bytes() == b"original bytes"
+
+
+def test_size_matches_within_one_percent():
+    from dongdongs.hwp.editor import size_matches
+
+    assert size_matches((45706, 17218), (45706, 17390))
+    assert not size_matches((45706, 17218), (45706, 17800))

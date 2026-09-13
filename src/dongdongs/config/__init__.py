@@ -1,4 +1,4 @@
-"""Institution rule loading and detection."""
+"""Institution rule loading, detection and the PDF -> HWP symbol map."""
 
 from __future__ import annotations
 
@@ -7,6 +7,8 @@ from pathlib import Path
 
 import pymupdf
 import yaml
+
+from .charmap import load_charmap, nfkc_equal, to_hwp_text
 
 
 def load_config(path: Path | None = None) -> dict:
@@ -35,3 +37,6 @@ def detect_institution(pdf_path: Path, config: dict) -> str | None:
         if needles and hits >= detect.get("min_pages", 1):
             return name
     return None
+
+
+__all__ = ["detect_institution", "institution", "load_charmap", "load_config", "nfkc_equal", "to_hwp_text"]

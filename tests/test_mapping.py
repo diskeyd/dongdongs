@@ -8,7 +8,7 @@ def _cell(row, col, text, colspan=1, rowspan=1):
 def _inventory():
     cells = [
         _cell(0, 0, "Supply circuit", colspan=3),
-        _cell(1, 0, "Impedance"), _cell(1, 1, "Ω"), _cell(1, 2, "1.0"),
+        _cell(1, 0, "Impedance"), _cell(1, 1, "\u2126"), _cell(1, 2, "1.0"),
         _cell(2, 0, "frequency"), _cell(2, 1, "Hz"), _cell(2, 2, "60"),
         _cell(3, 0, "Old item"), _cell(3, 1, "kV"), _cell(3, 2, "1"),
         _cell(4, 0, ""), _cell(4, 1, ""), _cell(4, 2, ""),
@@ -70,12 +70,12 @@ def test_build_candidates_flags_manual_watermark_pages():
     assert all("watermark_manual_required_on_source_page" in c["flags"] for c in result["changes"])
 
 
-def test_lookalike_units_are_flagged_not_hidden():
+def test_lookalike_units_outside_the_charmap_are_flagged_not_hidden():
     inventory = _inventory()
     table = inventory["tables"][0]
-    table["cells"][2]["text"] = "\u2126"  # OHM SIGN in the HWP
+    table["cells"][2]["text"] = "\u2160"  # ROMAN NUMERAL ONE in the HWP (not in charmap)
     pdf = _pdf_table()
-    pdf["rows"][0]["unit"] = "\u03a9"  # GREEK CAPITAL OMEGA in the PDF
+    pdf["rows"][0]["unit"] = "I"
     block = section_blocks(table, ["Supply circuit"])["Supply circuit"]
     changes, _ = section_changes(pdf, table, block, inventory)
     unit = _by(changes)[(1, "unit")]
@@ -112,7 +112,7 @@ def test_label_and_unit_sharing_one_cell_keep_hwp_spacing():
     changes, warnings = section_changes(pdf, table, block, inventory)
     by = _by(changes)
     assert by[(1, "label+unit")]["after"].startswith("Impedance") and "label_and_unit_share_cell_reconstructed" in by[(1, "label+unit")]["flags"]
-    assert by[(1, "label+unit")]["after"] == "Impedance                  \u03a9"
+    assert by[(1, "label+unit")]["after"] == "Impedance                  \u2126"
     assert by[(1, "value")]["after"] == "2.50"
     assert by[(2, "label+unit")]["no_op"]
     assert by[(3, "value")]["after"] == "< 0.1" and "whitespace_only_difference" in by[(3, "value")]["flags"]
@@ -139,3 +139,46 @@ def test_merged_label_cell_across_separator_is_matched():
     assert by[("H3", "value")]["before"] == "-" and by[("H3", "value")]["after"] == "earthed"
     assert {c["hwp"]["address"] for c in changes if "clear_not_in_pdf" in c["flags"]} == {"F2", "G2", "H2"}
     assert warnings == []
+
+
+def test_fit_picture_keeps_width_and_only_squeezes_height():
+    from dongdongs.hwp.mapping import fit_picture
+
+    squeezed = fit_picture([0, 0, 480, 330], 168.8, 98.0)
+    assert squeezed["width_mm"] == 168.8 and squeezed["height_mm"] == 98.0 and 0.84 < squeezed["vertical_scale"] < 0.86
+    natural = fit_picture([0, 0, 480, 330], 168.8, 200.0)
+    assert natural["height_mm"] == natural["natural_height_mm"] and natural["vertical_scale"] == 1.0
+
+
+def _graph_regions(page, layouts):
+    boxes = {"full": [86, 106, 566, 433], "half-left": [86, 435, 324, 762], "half-right": [327, 435, 566, 762]}
+    return [{"page": page, "index": i, "kind": "oscillogram", "layout": l, "bbox": boxes[l], "title": f"Osc. X-{page:03d}" if i == 0 else None, "png": f"images/p{page:03d}-{i}.png", "export": True} for i, l in enumerate(layouts)]
+
+
+def _graph_page_inventory(titles):
+    tables, paragraphs = [], []
+    for i, title in enumerate(titles):
+        cells = [{"row": r, "col": 0, "rowspan": 1, "colspan": 1, "width": 48880, "height": 60070 if r == 3 else 1000, "text": ("\n" + title + "\n") if r == 3 else f"h{r}"} for r in range(4)]
+        tables.append({"index": i, "depth": 0, "page_no": i + 1, "frame": i, "container": None, "rows": 4, "cols": 1, "width": 1, "height": 1, "cells": cells})
+        paragraphs.append({"text": title, "container": {"table": i, "row": 3, "col": 0}})
+    return {"table_count": len(tables), "picture_count": 0, "tables": tables, "pictures": [], "paragraphs": paragraphs}
+
+
+def test_graph_pages_are_planned_in_order_and_missing_pages_are_added():
+    from dongdongs.hwp.mapping import plan_oscillogram_pages
+
+    regions = _graph_regions(22, ["full", "half-left", "half-right"]) + _graph_regions(23, ["full", "full"]) + _graph_regions(24, ["full"])
+    inventory = _graph_page_inventory(["Osc. OLD-1", "Osc. OLD-2"])
+    cfg = {"inner_width_mm": 168.8, "gap_mm": 1.5, "reserved_height_mm": 14.0, "padding_height_mm": 1.0}
+    changes, warnings = plan_oscillogram_pages(regions, inventory, cfg, {})
+    assert [c["source"]["pdf_page"] for c in changes] == [22, 23, 24]
+    assert [c["hwp"]["page_no"] for c in changes] == [1, 2, 3]
+    assert changes[0]["before"] == "Osc. OLD-1" and changes[0]["after"] == "Osc. X-022"
+    assert [p["layout"] for p in changes[0]["pictures"]] == ["full", "half-left", "half-right"]
+    assert changes[0]["pictures"][1]["width_mm"] == changes[0]["pictures"][2]["width_mm"] == round((168.8 - 1.5) / 2, 2)
+    assert changes[0]["pictures"][1]["height_mm"] == changes[0]["pictures"][2]["height_mm"]
+    assert all(0.8 < p["vertical_scale"] <= 1.0 for c in changes for p in c["pictures"])
+    assert changes[2]["hwp"]["page_to_be_added"] and changes[2]["hwp"]["copies_after_anchor"] == 1 and "page_to_be_added" in changes[2]["flags"]
+    assert changes[2]["anchor"]["text"] == "Osc. OLD-2"
+    assert any("1 pages will be added" in w for w in warnings)
+    assert all(c["status"] == "review_required" for c in changes)

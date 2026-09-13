@@ -1,0 +1,1625 @@
+{
+ "description": "PDF text -> HWP code points. tier measured: the HWP report uses this code point; standard: NFKC-equivalent; lookalike: same meaning, different identity (applied and flagged); style: stored only. drop_ranges: private-use glyphs (leader dots) removed from values.",
+ "drop_ranges": [
+  [
+   "E000",
+   "F8FF"
+  ]
+ ],
+ "pairs": [
+  {
+   "pdf": "Ω",
+   "hwp": "Ω",
+   "tier": "measured",
+   "name": "GREEK CAPITAL OMEGA -> OHM SIGN (HWP uses U+2126)"
+  },
+  {
+   "pdf": "μ",
+   "hwp": "µ",
+   "tier": "measured",
+   "name": "GREEK SMALL MU -> MICRO SIGN (HWP uses U+00B5)"
+  },
+  {
+   "pdf": "°C",
+   "hwp": "℃",
+   "tier": "standard",
+   "name": "DEGREE SIGN+LATIN CAPITAL LETTER C -> DEGREE CELSIUS"
+  },
+  {
+   "pdf": "˚C",
+   "hwp": "℃",
+   "tier": "lookalike",
+   "name": "RING ABOVE+LATIN CAPITAL LETTER C -> DEGREE CELSIUS"
+  },
+  {
+   "pdf": "ºC",
+   "hwp": "℃",
+   "tier": "lookalike",
+   "name": "MASCULINE ORDINAL INDICATOR+LATIN CAPITAL LETTER C -> DEGREE CELSIUS"
+  },
+  {
+   "pdf": "°F",
+   "hwp": "℉",
+   "tier": "standard",
+   "name": "DEGREE SIGN+LATIN CAPITAL LETTER F -> DEGREE FAHRENHEIT"
+  },
+  {
+   "pdf": "㍱",
+   "hwp": "hPa",
+   "tier": "standard",
+   "name": "SQUARE HPA -> hPa"
+  },
+  {
+   "pdf": "㍲",
+   "hwp": "da",
+   "tier": "standard",
+   "name": "SQUARE DA -> da"
+  },
+  {
+   "pdf": "㍳",
+   "hwp": "AU",
+   "tier": "standard",
+   "name": "SQUARE AU -> AU"
+  },
+  {
+   "pdf": "㍴",
+   "hwp": "bar",
+   "tier": "standard",
+   "name": "SQUARE BAR -> bar"
+  },
+  {
+   "pdf": "㍵",
+   "hwp": "oV",
+   "tier": "standard",
+   "name": "SQUARE OV -> oV"
+  },
+  {
+   "pdf": "㍶",
+   "hwp": "pc",
+   "tier": "standard",
+   "name": "SQUARE PC -> pc"
+  },
+  {
+   "pdf": "㍷",
+   "hwp": "dm",
+   "tier": "standard",
+   "name": "SQUARE DM -> dm"
+  },
+  {
+   "pdf": "㍸",
+   "hwp": "dm2",
+   "tier": "standard",
+   "name": "SQUARE DM SQUARED -> dm2"
+  },
+  {
+   "pdf": "㍹",
+   "hwp": "dm3",
+   "tier": "standard",
+   "name": "SQUARE DM CUBED -> dm3"
+  },
+  {
+   "pdf": "㍺",
+   "hwp": "IU",
+   "tier": "standard",
+   "name": "SQUARE IU -> IU"
+  },
+  {
+   "pdf": "㎀",
+   "hwp": "pA",
+   "tier": "standard",
+   "name": "SQUARE PA AMPS -> pA"
+  },
+  {
+   "pdf": "㎁",
+   "hwp": "nA",
+   "tier": "standard",
+   "name": "SQUARE NA -> nA"
+  },
+  {
+   "pdf": "㎂",
+   "hwp": "µA",
+   "tier": "standard",
+   "name": "SQUARE MU A -> µA"
+  },
+  {
+   "pdf": "㎃",
+   "hwp": "mA",
+   "tier": "standard",
+   "name": "SQUARE MA -> mA"
+  },
+  {
+   "pdf": "㎄",
+   "hwp": "kA",
+   "tier": "standard",
+   "name": "SQUARE KA -> kA"
+  },
+  {
+   "pdf": "㎅",
+   "hwp": "KB",
+   "tier": "standard",
+   "name": "SQUARE KB -> KB"
+  },
+  {
+   "pdf": "㎆",
+   "hwp": "MB",
+   "tier": "standard",
+   "name": "SQUARE MB -> MB"
+  },
+  {
+   "pdf": "㎇",
+   "hwp": "GB",
+   "tier": "standard",
+   "name": "SQUARE GB -> GB"
+  },
+  {
+   "pdf": "㎈",
+   "hwp": "cal",
+   "tier": "standard",
+   "name": "SQUARE CAL -> cal"
+  },
+  {
+   "pdf": "㎉",
+   "hwp": "kcal",
+   "tier": "standard",
+   "name": "SQUARE KCAL -> kcal"
+  },
+  {
+   "pdf": "㎊",
+   "hwp": "pF",
+   "tier": "standard",
+   "name": "SQUARE PF -> pF"
+  },
+  {
+   "pdf": "㎋",
+   "hwp": "nF",
+   "tier": "standard",
+   "name": "SQUARE NF -> nF"
+  },
+  {
+   "pdf": "㎌",
+   "hwp": "µF",
+   "tier": "standard",
+   "name": "SQUARE MU F -> µF"
+  },
+  {
+   "pdf": "㎍",
+   "hwp": "µg",
+   "tier": "standard",
+   "name": "SQUARE MU G -> µg"
+  },
+  {
+   "pdf": "㎎",
+   "hwp": "mg",
+   "tier": "standard",
+   "name": "SQUARE MG -> mg"
+  },
+  {
+   "pdf": "㎏",
+   "hwp": "kg",
+   "tier": "standard",
+   "name": "SQUARE KG -> kg"
+  },
+  {
+   "pdf": "㎐",
+   "hwp": "Hz",
+   "tier": "standard",
+   "name": "SQUARE HZ -> Hz"
+  },
+  {
+   "pdf": "㎑",
+   "hwp": "kHz",
+   "tier": "standard",
+   "name": "SQUARE KHZ -> kHz"
+  },
+  {
+   "pdf": "㎒",
+   "hwp": "MHz",
+   "tier": "standard",
+   "name": "SQUARE MHZ -> MHz"
+  },
+  {
+   "pdf": "㎓",
+   "hwp": "GHz",
+   "tier": "standard",
+   "name": "SQUARE GHZ -> GHz"
+  },
+  {
+   "pdf": "㎔",
+   "hwp": "THz",
+   "tier": "standard",
+   "name": "SQUARE THZ -> THz"
+  },
+  {
+   "pdf": "㎕",
+   "hwp": "µl",
+   "tier": "standard",
+   "name": "SQUARE MU L -> µl"
+  },
+  {
+   "pdf": "㎖",
+   "hwp": "ml",
+   "tier": "standard",
+   "name": "SQUARE ML -> ml"
+  },
+  {
+   "pdf": "㎗",
+   "hwp": "dl",
+   "tier": "standard",
+   "name": "SQUARE DL -> dl"
+  },
+  {
+   "pdf": "㎘",
+   "hwp": "kl",
+   "tier": "standard",
+   "name": "SQUARE KL -> kl"
+  },
+  {
+   "pdf": "㎙",
+   "hwp": "fm",
+   "tier": "standard",
+   "name": "SQUARE FM -> fm"
+  },
+  {
+   "pdf": "㎚",
+   "hwp": "nm",
+   "tier": "standard",
+   "name": "SQUARE NM -> nm"
+  },
+  {
+   "pdf": "㎛",
+   "hwp": "µm",
+   "tier": "standard",
+   "name": "SQUARE MU M -> µm"
+  },
+  {
+   "pdf": "㎜",
+   "hwp": "mm",
+   "tier": "standard",
+   "name": "SQUARE MM -> mm"
+  },
+  {
+   "pdf": "㎝",
+   "hwp": "cm",
+   "tier": "standard",
+   "name": "SQUARE CM -> cm"
+  },
+  {
+   "pdf": "㎞",
+   "hwp": "km",
+   "tier": "standard",
+   "name": "SQUARE KM -> km"
+  },
+  {
+   "pdf": "㎟",
+   "hwp": "mm2",
+   "tier": "standard",
+   "name": "SQUARE MM SQUARED -> mm2"
+  },
+  {
+   "pdf": "㎠",
+   "hwp": "cm2",
+   "tier": "standard",
+   "name": "SQUARE CM SQUARED -> cm2"
+  },
+  {
+   "pdf": "㎡",
+   "hwp": "m2",
+   "tier": "standard",
+   "name": "SQUARE M SQUARED -> m2"
+  },
+  {
+   "pdf": "㎢",
+   "hwp": "km2",
+   "tier": "standard",
+   "name": "SQUARE KM SQUARED -> km2"
+  },
+  {
+   "pdf": "㎣",
+   "hwp": "mm3",
+   "tier": "standard",
+   "name": "SQUARE MM CUBED -> mm3"
+  },
+  {
+   "pdf": "㎤",
+   "hwp": "cm3",
+   "tier": "standard",
+   "name": "SQUARE CM CUBED -> cm3"
+  },
+  {
+   "pdf": "㎥",
+   "hwp": "m3",
+   "tier": "standard",
+   "name": "SQUARE M CUBED -> m3"
+  },
+  {
+   "pdf": "㎦",
+   "hwp": "km3",
+   "tier": "standard",
+   "name": "SQUARE KM CUBED -> km3"
+  },
+  {
+   "pdf": "㎩",
+   "hwp": "Pa",
+   "tier": "standard",
+   "name": "SQUARE PA -> Pa"
+  },
+  {
+   "pdf": "㎪",
+   "hwp": "kPa",
+   "tier": "standard",
+   "name": "SQUARE KPA -> kPa"
+  },
+  {
+   "pdf": "㎫",
+   "hwp": "MPa",
+   "tier": "standard",
+   "name": "SQUARE MPA -> MPa"
+  },
+  {
+   "pdf": "㎬",
+   "hwp": "GPa",
+   "tier": "standard",
+   "name": "SQUARE GPA -> GPa"
+  },
+  {
+   "pdf": "㎭",
+   "hwp": "rad",
+   "tier": "standard",
+   "name": "SQUARE RAD -> rad"
+  },
+  {
+   "pdf": "㎰",
+   "hwp": "ps",
+   "tier": "standard",
+   "name": "SQUARE PS -> ps"
+  },
+  {
+   "pdf": "㎱",
+   "hwp": "ns",
+   "tier": "standard",
+   "name": "SQUARE NS -> ns"
+  },
+  {
+   "pdf": "㎲",
+   "hwp": "µs",
+   "tier": "standard",
+   "name": "SQUARE MU S -> µs"
+  },
+  {
+   "pdf": "㎳",
+   "hwp": "ms",
+   "tier": "standard",
+   "name": "SQUARE MS -> ms"
+  },
+  {
+   "pdf": "㎴",
+   "hwp": "pV",
+   "tier": "standard",
+   "name": "SQUARE PV -> pV"
+  },
+  {
+   "pdf": "㎵",
+   "hwp": "nV",
+   "tier": "standard",
+   "name": "SQUARE NV -> nV"
+  },
+  {
+   "pdf": "㎶",
+   "hwp": "µV",
+   "tier": "standard",
+   "name": "SQUARE MU V -> µV"
+  },
+  {
+   "pdf": "㎷",
+   "hwp": "mV",
+   "tier": "standard",
+   "name": "SQUARE MV -> mV"
+  },
+  {
+   "pdf": "㎸",
+   "hwp": "kV",
+   "tier": "standard",
+   "name": "SQUARE KV -> kV"
+  },
+  {
+   "pdf": "㎹",
+   "hwp": "MV",
+   "tier": "standard",
+   "name": "SQUARE MV MEGA -> MV"
+  },
+  {
+   "pdf": "㎺",
+   "hwp": "pW",
+   "tier": "standard",
+   "name": "SQUARE PW -> pW"
+  },
+  {
+   "pdf": "㎻",
+   "hwp": "nW",
+   "tier": "standard",
+   "name": "SQUARE NW -> nW"
+  },
+  {
+   "pdf": "㎼",
+   "hwp": "µW",
+   "tier": "standard",
+   "name": "SQUARE MU W -> µW"
+  },
+  {
+   "pdf": "㎽",
+   "hwp": "mW",
+   "tier": "standard",
+   "name": "SQUARE MW -> mW"
+  },
+  {
+   "pdf": "㎾",
+   "hwp": "kW",
+   "tier": "standard",
+   "name": "SQUARE KW -> kW"
+  },
+  {
+   "pdf": "㎿",
+   "hwp": "MW",
+   "tier": "standard",
+   "name": "SQUARE MW MEGA -> MW"
+  },
+  {
+   "pdf": "㏂",
+   "hwp": "a.m.",
+   "tier": "standard",
+   "name": "SQUARE AM -> a.m."
+  },
+  {
+   "pdf": "㏃",
+   "hwp": "Bq",
+   "tier": "standard",
+   "name": "SQUARE BQ -> Bq"
+  },
+  {
+   "pdf": "㏄",
+   "hwp": "cc",
+   "tier": "standard",
+   "name": "SQUARE CC -> cc"
+  },
+  {
+   "pdf": "㏅",
+   "hwp": "cd",
+   "tier": "standard",
+   "name": "SQUARE CD -> cd"
+  },
+  {
+   "pdf": "㏇",
+   "hwp": "Co.",
+   "tier": "standard",
+   "name": "SQUARE CO -> Co."
+  },
+  {
+   "pdf": "㏈",
+   "hwp": "dB",
+   "tier": "standard",
+   "name": "SQUARE DB -> dB"
+  },
+  {
+   "pdf": "㏉",
+   "hwp": "Gy",
+   "tier": "standard",
+   "name": "SQUARE GY -> Gy"
+  },
+  {
+   "pdf": "㏊",
+   "hwp": "ha",
+   "tier": "standard",
+   "name": "SQUARE HA -> ha"
+  },
+  {
+   "pdf": "㏋",
+   "hwp": "HP",
+   "tier": "standard",
+   "name": "SQUARE HP -> HP"
+  },
+  {
+   "pdf": "㏌",
+   "hwp": "in",
+   "tier": "standard",
+   "name": "SQUARE IN -> in"
+  },
+  {
+   "pdf": "㏍",
+   "hwp": "KK",
+   "tier": "standard",
+   "name": "SQUARE KK -> KK"
+  },
+  {
+   "pdf": "㏎",
+   "hwp": "KM",
+   "tier": "standard",
+   "name": "SQUARE KM CAPITAL -> KM"
+  },
+  {
+   "pdf": "㏏",
+   "hwp": "kt",
+   "tier": "standard",
+   "name": "SQUARE KT -> kt"
+  },
+  {
+   "pdf": "㏐",
+   "hwp": "lm",
+   "tier": "standard",
+   "name": "SQUARE LM -> lm"
+  },
+  {
+   "pdf": "㏑",
+   "hwp": "ln",
+   "tier": "standard",
+   "name": "SQUARE LN -> ln"
+  },
+  {
+   "pdf": "㏒",
+   "hwp": "log",
+   "tier": "standard",
+   "name": "SQUARE LOG -> log"
+  },
+  {
+   "pdf": "㏓",
+   "hwp": "lx",
+   "tier": "standard",
+   "name": "SQUARE LX -> lx"
+  },
+  {
+   "pdf": "㏔",
+   "hwp": "mb",
+   "tier": "standard",
+   "name": "SQUARE MB SMALL -> mb"
+  },
+  {
+   "pdf": "㏕",
+   "hwp": "mil",
+   "tier": "standard",
+   "name": "SQUARE MIL -> mil"
+  },
+  {
+   "pdf": "㏖",
+   "hwp": "mol",
+   "tier": "standard",
+   "name": "SQUARE MOL -> mol"
+  },
+  {
+   "pdf": "㏗",
+   "hwp": "PH",
+   "tier": "standard",
+   "name": "SQUARE PH -> PH"
+  },
+  {
+   "pdf": "㏘",
+   "hwp": "p.m.",
+   "tier": "standard",
+   "name": "SQUARE PM -> p.m."
+  },
+  {
+   "pdf": "㏙",
+   "hwp": "PPM",
+   "tier": "standard",
+   "name": "SQUARE PPM -> PPM"
+  },
+  {
+   "pdf": "㏚",
+   "hwp": "PR",
+   "tier": "standard",
+   "name": "SQUARE PR -> PR"
+  },
+  {
+   "pdf": "㏛",
+   "hwp": "sr",
+   "tier": "standard",
+   "name": "SQUARE SR -> sr"
+  },
+  {
+   "pdf": "㏜",
+   "hwp": "Sv",
+   "tier": "standard",
+   "name": "SQUARE SV -> Sv"
+  },
+  {
+   "pdf": "㏝",
+   "hwp": "Wb",
+   "tier": "standard",
+   "name": "SQUARE WB -> Wb"
+  },
+  {
+   "pdf": "！",
+   "hwp": "!",
+   "tier": "standard",
+   "name": "FULLWIDTH EXCLAMATION MARK -> EXCLAMATION MARK"
+  },
+  {
+   "pdf": "＂",
+   "hwp": "\"",
+   "tier": "standard",
+   "name": "FULLWIDTH QUOTATION MARK -> QUOTATION MARK"
+  },
+  {
+   "pdf": "＃",
+   "hwp": "#",
+   "tier": "standard",
+   "name": "FULLWIDTH NUMBER SIGN -> NUMBER SIGN"
+  },
+  {
+   "pdf": "＄",
+   "hwp": "$",
+   "tier": "standard",
+   "name": "FULLWIDTH DOLLAR SIGN -> DOLLAR SIGN"
+  },
+  {
+   "pdf": "％",
+   "hwp": "%",
+   "tier": "standard",
+   "name": "FULLWIDTH PERCENT SIGN -> PERCENT SIGN"
+  },
+  {
+   "pdf": "＆",
+   "hwp": "&",
+   "tier": "standard",
+   "name": "FULLWIDTH AMPERSAND -> AMPERSAND"
+  },
+  {
+   "pdf": "＇",
+   "hwp": "'",
+   "tier": "standard",
+   "name": "FULLWIDTH APOSTROPHE -> APOSTROPHE"
+  },
+  {
+   "pdf": "（",
+   "hwp": "(",
+   "tier": "standard",
+   "name": "FULLWIDTH LEFT PARENTHESIS -> LEFT PARENTHESIS"
+  },
+  {
+   "pdf": "）",
+   "hwp": ")",
+   "tier": "standard",
+   "name": "FULLWIDTH RIGHT PARENTHESIS -> RIGHT PARENTHESIS"
+  },
+  {
+   "pdf": "＊",
+   "hwp": "*",
+   "tier": "standard",
+   "name": "FULLWIDTH ASTERISK -> ASTERISK"
+  },
+  {
+   "pdf": "＋",
+   "hwp": "+",
+   "tier": "standard",
+   "name": "FULLWIDTH PLUS SIGN -> PLUS SIGN"
+  },
+  {
+   "pdf": "，",
+   "hwp": ",",
+   "tier": "standard",
+   "name": "FULLWIDTH COMMA -> COMMA"
+  },
+  {
+   "pdf": "－",
+   "hwp": "-",
+   "tier": "standard",
+   "name": "FULLWIDTH HYPHEN-MINUS -> HYPHEN-MINUS"
+  },
+  {
+   "pdf": "．",
+   "hwp": ".",
+   "tier": "standard",
+   "name": "FULLWIDTH FULL STOP -> FULL STOP"
+  },
+  {
+   "pdf": "／",
+   "hwp": "/",
+   "tier": "standard",
+   "name": "FULLWIDTH SOLIDUS -> SOLIDUS"
+  },
+  {
+   "pdf": "０",
+   "hwp": "0",
+   "tier": "standard",
+   "name": "FULLWIDTH DIGIT ZERO -> DIGIT ZERO"
+  },
+  {
+   "pdf": "１",
+   "hwp": "1",
+   "tier": "standard",
+   "name": "FULLWIDTH DIGIT ONE -> DIGIT ONE"
+  },
+  {
+   "pdf": "２",
+   "hwp": "2",
+   "tier": "standard",
+   "name": "FULLWIDTH DIGIT TWO -> DIGIT TWO"
+  },
+  {
+   "pdf": "３",
+   "hwp": "3",
+   "tier": "standard",
+   "name": "FULLWIDTH DIGIT THREE -> DIGIT THREE"
+  },
+  {
+   "pdf": "４",
+   "hwp": "4",
+   "tier": "standard",
+   "name": "FULLWIDTH DIGIT FOUR -> DIGIT FOUR"
+  },
+  {
+   "pdf": "５",
+   "hwp": "5",
+   "tier": "standard",
+   "name": "FULLWIDTH DIGIT FIVE -> DIGIT FIVE"
+  },
+  {
+   "pdf": "６",
+   "hwp": "6",
+   "tier": "standard",
+   "name": "FULLWIDTH DIGIT SIX -> DIGIT SIX"
+  },
+  {
+   "pdf": "７",
+   "hwp": "7",
+   "tier": "standard",
+   "name": "FULLWIDTH DIGIT SEVEN -> DIGIT SEVEN"
+  },
+  {
+   "pdf": "８",
+   "hwp": "8",
+   "tier": "standard",
+   "name": "FULLWIDTH DIGIT EIGHT -> DIGIT EIGHT"
+  },
+  {
+   "pdf": "９",
+   "hwp": "9",
+   "tier": "standard",
+   "name": "FULLWIDTH DIGIT NINE -> DIGIT NINE"
+  },
+  {
+   "pdf": "：",
+   "hwp": ":",
+   "tier": "standard",
+   "name": "FULLWIDTH COLON -> COLON"
+  },
+  {
+   "pdf": "；",
+   "hwp": ";",
+   "tier": "standard",
+   "name": "FULLWIDTH SEMICOLON -> SEMICOLON"
+  },
+  {
+   "pdf": "＜",
+   "hwp": "<",
+   "tier": "standard",
+   "name": "FULLWIDTH LESS-THAN SIGN -> LESS-THAN SIGN"
+  },
+  {
+   "pdf": "＝",
+   "hwp": "=",
+   "tier": "standard",
+   "name": "FULLWIDTH EQUALS SIGN -> EQUALS SIGN"
+  },
+  {
+   "pdf": "＞",
+   "hwp": ">",
+   "tier": "standard",
+   "name": "FULLWIDTH GREATER-THAN SIGN -> GREATER-THAN SIGN"
+  },
+  {
+   "pdf": "？",
+   "hwp": "?",
+   "tier": "standard",
+   "name": "FULLWIDTH QUESTION MARK -> QUESTION MARK"
+  },
+  {
+   "pdf": "＠",
+   "hwp": "@",
+   "tier": "standard",
+   "name": "FULLWIDTH COMMERCIAL AT -> COMMERCIAL AT"
+  },
+  {
+   "pdf": "Ａ",
+   "hwp": "A",
+   "tier": "standard",
+   "name": "FULLWIDTH LATIN CAPITAL LETTER A -> LATIN CAPITAL LETTER A"
+  },
+  {
+   "pdf": "Ｂ",
+   "hwp": "B",
+   "tier": "standard",
+   "name": "FULLWIDTH LATIN CAPITAL LETTER B -> LATIN CAPITAL LETTER B"
+  },
+  {
+   "pdf": "Ｃ",
+   "hwp": "C",
+   "tier": "standard",
+   "name": "FULLWIDTH LATIN CAPITAL LETTER C -> LATIN CAPITAL LETTER C"
+  },
+  {
+   "pdf": "Ｄ",
+   "hwp": "D",
+   "tier": "standard",
+   "name": "FULLWIDTH LATIN CAPITAL LETTER D -> LATIN CAPITAL LETTER D"
+  },
+  {
+   "pdf": "Ｅ",
+   "hwp": "E",
+   "tier": "standard",
+   "name": "FULLWIDTH LATIN CAPITAL LETTER E -> LATIN CAPITAL LETTER E"
+  },
+  {
+   "pdf": "Ｆ",
+   "hwp": "F",
+   "tier": "standard",
+   "name": "FULLWIDTH LATIN CAPITAL LETTER F -> LATIN CAPITAL LETTER F"
+  },
+  {
+   "pdf": "Ｇ",
+   "hwp": "G",
+   "tier": "standard",
+   "name": "FULLWIDTH LATIN CAPITAL LETTER G -> LATIN CAPITAL LETTER G"
+  },
+  {
+   "pdf": "Ｈ",
+   "hwp": "H",
+   "tier": "standard",
+   "name": "FULLWIDTH LATIN CAPITAL LETTER H -> LATIN CAPITAL LETTER H"
+  },
+  {
+   "pdf": "Ｉ",
+   "hwp": "I",
+   "tier": "standard",
+   "name": "FULLWIDTH LATIN CAPITAL LETTER I -> LATIN CAPITAL LETTER I"
+  },
+  {
+   "pdf": "Ｊ",
+   "hwp": "J",
+   "tier": "standard",
+   "name": "FULLWIDTH LATIN CAPITAL LETTER J -> LATIN CAPITAL LETTER J"
+  },
+  {
+   "pdf": "Ｋ",
+   "hwp": "K",
+   "tier": "standard",
+   "name": "FULLWIDTH LATIN CAPITAL LETTER K -> LATIN CAPITAL LETTER K"
+  },
+  {
+   "pdf": "Ｌ",
+   "hwp": "L",
+   "tier": "standard",
+   "name": "FULLWIDTH LATIN CAPITAL LETTER L -> LATIN CAPITAL LETTER L"
+  },
+  {
+   "pdf": "Ｍ",
+   "hwp": "M",
+   "tier": "standard",
+   "name": "FULLWIDTH LATIN CAPITAL LETTER M -> LATIN CAPITAL LETTER M"
+  },
+  {
+   "pdf": "Ｎ",
+   "hwp": "N",
+   "tier": "standard",
+   "name": "FULLWIDTH LATIN CAPITAL LETTER N -> LATIN CAPITAL LETTER N"
+  },
+  {
+   "pdf": "Ｏ",
+   "hwp": "O",
+   "tier": "standard",
+   "name": "FULLWIDTH LATIN CAPITAL LETTER O -> LATIN CAPITAL LETTER O"
+  },
+  {
+   "pdf": "Ｐ",
+   "hwp": "P",
+   "tier": "standard",
+   "name": "FULLWIDTH LATIN CAPITAL LETTER P -> LATIN CAPITAL LETTER P"
+  },
+  {
+   "pdf": "Ｑ",
+   "hwp": "Q",
+   "tier": "standard",
+   "name": "FULLWIDTH LATIN CAPITAL LETTER Q -> LATIN CAPITAL LETTER Q"
+  },
+  {
+   "pdf": "Ｒ",
+   "hwp": "R",
+   "tier": "standard",
+   "name": "FULLWIDTH LATIN CAPITAL LETTER R -> LATIN CAPITAL LETTER R"
+  },
+  {
+   "pdf": "Ｓ",
+   "hwp": "S",
+   "tier": "standard",
+   "name": "FULLWIDTH LATIN CAPITAL LETTER S -> LATIN CAPITAL LETTER S"
+  },
+  {
+   "pdf": "Ｔ",
+   "hwp": "T",
+   "tier": "standard",
+   "name": "FULLWIDTH LATIN CAPITAL LETTER T -> LATIN CAPITAL LETTER T"
+  },
+  {
+   "pdf": "Ｕ",
+   "hwp": "U",
+   "tier": "standard",
+   "name": "FULLWIDTH LATIN CAPITAL LETTER U -> LATIN CAPITAL LETTER U"
+  },
+  {
+   "pdf": "Ｖ",
+   "hwp": "V",
+   "tier": "standard",
+   "name": "FULLWIDTH LATIN CAPITAL LETTER V -> LATIN CAPITAL LETTER V"
+  },
+  {
+   "pdf": "Ｗ",
+   "hwp": "W",
+   "tier": "standard",
+   "name": "FULLWIDTH LATIN CAPITAL LETTER W -> LATIN CAPITAL LETTER W"
+  },
+  {
+   "pdf": "Ｘ",
+   "hwp": "X",
+   "tier": "standard",
+   "name": "FULLWIDTH LATIN CAPITAL LETTER X -> LATIN CAPITAL LETTER X"
+  },
+  {
+   "pdf": "Ｙ",
+   "hwp": "Y",
+   "tier": "standard",
+   "name": "FULLWIDTH LATIN CAPITAL LETTER Y -> LATIN CAPITAL LETTER Y"
+  },
+  {
+   "pdf": "Ｚ",
+   "hwp": "Z",
+   "tier": "standard",
+   "name": "FULLWIDTH LATIN CAPITAL LETTER Z -> LATIN CAPITAL LETTER Z"
+  },
+  {
+   "pdf": "［",
+   "hwp": "[",
+   "tier": "standard",
+   "name": "FULLWIDTH LEFT SQUARE BRACKET -> LEFT SQUARE BRACKET"
+  },
+  {
+   "pdf": "＼",
+   "hwp": "\\",
+   "tier": "standard",
+   "name": "FULLWIDTH REVERSE SOLIDUS -> REVERSE SOLIDUS"
+  },
+  {
+   "pdf": "］",
+   "hwp": "]",
+   "tier": "standard",
+   "name": "FULLWIDTH RIGHT SQUARE BRACKET -> RIGHT SQUARE BRACKET"
+  },
+  {
+   "pdf": "＾",
+   "hwp": "^",
+   "tier": "standard",
+   "name": "FULLWIDTH CIRCUMFLEX ACCENT -> CIRCUMFLEX ACCENT"
+  },
+  {
+   "pdf": "＿",
+   "hwp": "_",
+   "tier": "standard",
+   "name": "FULLWIDTH LOW LINE -> LOW LINE"
+  },
+  {
+   "pdf": "｀",
+   "hwp": "`",
+   "tier": "standard",
+   "name": "FULLWIDTH GRAVE ACCENT -> GRAVE ACCENT"
+  },
+  {
+   "pdf": "ａ",
+   "hwp": "a",
+   "tier": "standard",
+   "name": "FULLWIDTH LATIN SMALL LETTER A -> LATIN SMALL LETTER A"
+  },
+  {
+   "pdf": "ｂ",
+   "hwp": "b",
+   "tier": "standard",
+   "name": "FULLWIDTH LATIN SMALL LETTER B -> LATIN SMALL LETTER B"
+  },
+  {
+   "pdf": "ｃ",
+   "hwp": "c",
+   "tier": "standard",
+   "name": "FULLWIDTH LATIN SMALL LETTER C -> LATIN SMALL LETTER C"
+  },
+  {
+   "pdf": "ｄ",
+   "hwp": "d",
+   "tier": "standard",
+   "name": "FULLWIDTH LATIN SMALL LETTER D -> LATIN SMALL LETTER D"
+  },
+  {
+   "pdf": "ｅ",
+   "hwp": "e",
+   "tier": "standard",
+   "name": "FULLWIDTH LATIN SMALL LETTER E -> LATIN SMALL LETTER E"
+  },
+  {
+   "pdf": "ｆ",
+   "hwp": "f",
+   "tier": "standard",
+   "name": "FULLWIDTH LATIN SMALL LETTER F -> LATIN SMALL LETTER F"
+  },
+  {
+   "pdf": "ｇ",
+   "hwp": "g",
+   "tier": "standard",
+   "name": "FULLWIDTH LATIN SMALL LETTER G -> LATIN SMALL LETTER G"
+  },
+  {
+   "pdf": "ｈ",
+   "hwp": "h",
+   "tier": "standard",
+   "name": "FULLWIDTH LATIN SMALL LETTER H -> LATIN SMALL LETTER H"
+  },
+  {
+   "pdf": "ｉ",
+   "hwp": "i",
+   "tier": "standard",
+   "name": "FULLWIDTH LATIN SMALL LETTER I -> LATIN SMALL LETTER I"
+  },
+  {
+   "pdf": "ｊ",
+   "hwp": "j",
+   "tier": "standard",
+   "name": "FULLWIDTH LATIN SMALL LETTER J -> LATIN SMALL LETTER J"
+  },
+  {
+   "pdf": "ｋ",
+   "hwp": "k",
+   "tier": "standard",
+   "name": "FULLWIDTH LATIN SMALL LETTER K -> LATIN SMALL LETTER K"
+  },
+  {
+   "pdf": "ｌ",
+   "hwp": "l",
+   "tier": "standard",
+   "name": "FULLWIDTH LATIN SMALL LETTER L -> LATIN SMALL LETTER L"
+  },
+  {
+   "pdf": "ｍ",
+   "hwp": "m",
+   "tier": "standard",
+   "name": "FULLWIDTH LATIN SMALL LETTER M -> LATIN SMALL LETTER M"
+  },
+  {
+   "pdf": "ｎ",
+   "hwp": "n",
+   "tier": "standard",
+   "name": "FULLWIDTH LATIN SMALL LETTER N -> LATIN SMALL LETTER N"
+  },
+  {
+   "pdf": "ｏ",
+   "hwp": "o",
+   "tier": "standard",
+   "name": "FULLWIDTH LATIN SMALL LETTER O -> LATIN SMALL LETTER O"
+  },
+  {
+   "pdf": "ｐ",
+   "hwp": "p",
+   "tier": "standard",
+   "name": "FULLWIDTH LATIN SMALL LETTER P -> LATIN SMALL LETTER P"
+  },
+  {
+   "pdf": "ｑ",
+   "hwp": "q",
+   "tier": "standard",
+   "name": "FULLWIDTH LATIN SMALL LETTER Q -> LATIN SMALL LETTER Q"
+  },
+  {
+   "pdf": "ｒ",
+   "hwp": "r",
+   "tier": "standard",
+   "name": "FULLWIDTH LATIN SMALL LETTER R -> LATIN SMALL LETTER R"
+  },
+  {
+   "pdf": "ｓ",
+   "hwp": "s",
+   "tier": "standard",
+   "name": "FULLWIDTH LATIN SMALL LETTER S -> LATIN SMALL LETTER S"
+  },
+  {
+   "pdf": "ｔ",
+   "hwp": "t",
+   "tier": "standard",
+   "name": "FULLWIDTH LATIN SMALL LETTER T -> LATIN SMALL LETTER T"
+  },
+  {
+   "pdf": "ｕ",
+   "hwp": "u",
+   "tier": "standard",
+   "name": "FULLWIDTH LATIN SMALL LETTER U -> LATIN SMALL LETTER U"
+  },
+  {
+   "pdf": "ｖ",
+   "hwp": "v",
+   "tier": "standard",
+   "name": "FULLWIDTH LATIN SMALL LETTER V -> LATIN SMALL LETTER V"
+  },
+  {
+   "pdf": "ｗ",
+   "hwp": "w",
+   "tier": "standard",
+   "name": "FULLWIDTH LATIN SMALL LETTER W -> LATIN SMALL LETTER W"
+  },
+  {
+   "pdf": "ｘ",
+   "hwp": "x",
+   "tier": "standard",
+   "name": "FULLWIDTH LATIN SMALL LETTER X -> LATIN SMALL LETTER X"
+  },
+  {
+   "pdf": "ｙ",
+   "hwp": "y",
+   "tier": "standard",
+   "name": "FULLWIDTH LATIN SMALL LETTER Y -> LATIN SMALL LETTER Y"
+  },
+  {
+   "pdf": "ｚ",
+   "hwp": "z",
+   "tier": "standard",
+   "name": "FULLWIDTH LATIN SMALL LETTER Z -> LATIN SMALL LETTER Z"
+  },
+  {
+   "pdf": "｛",
+   "hwp": "{",
+   "tier": "standard",
+   "name": "FULLWIDTH LEFT CURLY BRACKET -> LEFT CURLY BRACKET"
+  },
+  {
+   "pdf": "｜",
+   "hwp": "|",
+   "tier": "standard",
+   "name": "FULLWIDTH VERTICAL LINE -> VERTICAL LINE"
+  },
+  {
+   "pdf": "｝",
+   "hwp": "}",
+   "tier": "standard",
+   "name": "FULLWIDTH RIGHT CURLY BRACKET -> RIGHT CURLY BRACKET"
+  },
+  {
+   "pdf": "～",
+   "hwp": "~",
+   "tier": "standard",
+   "name": "FULLWIDTH TILDE -> TILDE"
+  },
+  {
+   "pdf": " ",
+   "hwp": " ",
+   "tier": "standard",
+   "name": "NO-BREAK SPACE -> SPACE"
+  },
+  {
+   "pdf": " ",
+   "hwp": " ",
+   "tier": "standard",
+   "name": "EN SPACE -> SPACE"
+  },
+  {
+   "pdf": " ",
+   "hwp": " ",
+   "tier": "standard",
+   "name": "EM SPACE -> SPACE"
+  },
+  {
+   "pdf": " ",
+   "hwp": " ",
+   "tier": "standard",
+   "name": "FIGURE SPACE -> SPACE"
+  },
+  {
+   "pdf": " ",
+   "hwp": " ",
+   "tier": "standard",
+   "name": "THIN SPACE -> SPACE"
+  },
+  {
+   "pdf": " ",
+   "hwp": " ",
+   "tier": "standard",
+   "name": "HAIR SPACE -> SPACE"
+  },
+  {
+   "pdf": " ",
+   "hwp": " ",
+   "tier": "standard",
+   "name": "NARROW NO-BREAK SPACE -> SPACE"
+  },
+  {
+   "pdf": "　",
+   "hwp": " ",
+   "tier": "standard",
+   "name": "IDEOGRAPHIC SPACE -> SPACE"
+  },
+  {
+   "pdf": "ϑ",
+   "hwp": "θ",
+   "tier": "standard",
+   "name": "GREEK THETA SYMBOL -> GREEK SMALL LETTER THETA"
+  },
+  {
+   "pdf": "ϕ",
+   "hwp": "φ",
+   "tier": "standard",
+   "name": "GREEK PHI SYMBOL -> GREEK SMALL LETTER PHI"
+  },
+  {
+   "pdf": "ϵ",
+   "hwp": "ε",
+   "tier": "standard",
+   "name": "GREEK LUNATE EPSILON SYMBOL -> GREEK SMALL LETTER EPSILON"
+  },
+  {
+   "pdf": "ϰ",
+   "hwp": "κ",
+   "tier": "standard",
+   "name": "GREEK KAPPA SYMBOL -> GREEK SMALL LETTER KAPPA"
+  },
+  {
+   "pdf": "ϱ",
+   "hwp": "ρ",
+   "tier": "standard",
+   "name": "GREEK RHO SYMBOL -> GREEK SMALL LETTER RHO"
+  },
+  {
+   "pdf": "ϖ",
+   "hwp": "π",
+   "tier": "standard",
+   "name": "GREEK PI SYMBOL -> GREEK SMALL LETTER PI"
+  },
+  {
+   "pdf": "∆",
+   "hwp": "Δ",
+   "tier": "lookalike",
+   "name": "INCREMENT -> GREEK CAPITAL DELTA"
+  },
+  {
+   "pdf": "∑",
+   "hwp": "Σ",
+   "tier": "lookalike",
+   "name": "N-ARY SUMMATION -> GREEK CAPITAL SIGMA"
+  },
+  {
+   "pdf": "∏",
+   "hwp": "Π",
+   "tier": "lookalike",
+   "name": "N-ARY PRODUCT -> GREEK CAPITAL PI"
+  },
+  {
+   "pdf": "Ω",
+   "hwp": "Ω",
+   "tier": "measured",
+   "name": "OHM SIGN kept"
+  },
+  {
+   "pdf": "−",
+   "hwp": "-",
+   "tier": "lookalike",
+   "name": "MINUS SIGN -> HYPHEN-MINUS"
+  },
+  {
+   "pdf": "‒",
+   "hwp": "-",
+   "tier": "lookalike",
+   "name": "FIGURE DASH -> HYPHEN-MINUS"
+  },
+  {
+   "pdf": "–",
+   "hwp": "-",
+   "tier": "lookalike",
+   "name": "EN DASH -> HYPHEN-MINUS"
+  },
+  {
+   "pdf": "—",
+   "hwp": "-",
+   "tier": "lookalike",
+   "name": "EM DASH -> HYPHEN-MINUS"
+  },
+  {
+   "pdf": "‐",
+   "hwp": "-",
+   "tier": "lookalike",
+   "name": "HYPHEN -> HYPHEN-MINUS"
+  },
+  {
+   "pdf": "‑",
+   "hwp": "-",
+   "tier": "lookalike",
+   "name": "NON-BREAKING HYPHEN -> HYPHEN-MINUS"
+  },
+  {
+   "pdf": "―",
+   "hwp": "-",
+   "tier": "lookalike",
+   "name": "HORIZONTAL BAR -> HYPHEN-MINUS"
+  },
+  {
+   "pdf": "≦",
+   "hwp": "≤",
+   "tier": "lookalike",
+   "name": "LESS-THAN OVER EQUAL TO -> LESS-THAN OR EQUAL TO"
+  },
+  {
+   "pdf": "≧",
+   "hwp": "≥",
+   "tier": "lookalike",
+   "name": "GREATER-THAN OVER EQUAL TO -> GREATER-THAN OR EQUAL TO"
+  },
+  {
+   "pdf": "≤",
+   "hwp": "≤",
+   "tier": "measured",
+   "name": "LESS-THAN OR EQUAL TO kept (HWP uses it)"
+  },
+  {
+   "pdf": "∼",
+   "hwp": "~",
+   "tier": "lookalike",
+   "name": "TILDE OPERATOR -> TILDE"
+  },
+  {
+   "pdf": "〜",
+   "hwp": "~",
+   "tier": "lookalike",
+   "name": "WAVE DASH -> TILDE"
+  },
+  {
+   "pdf": "∙",
+   "hwp": "·",
+   "tier": "lookalike",
+   "name": "BULLET OPERATOR -> MIDDLE DOT"
+  },
+  {
+   "pdf": "•",
+   "hwp": "·",
+   "tier": "lookalike",
+   "name": "BULLET -> MIDDLE DOT"
+  },
+  {
+   "pdf": "․",
+   "hwp": ".",
+   "tier": "lookalike",
+   "name": "ONE DOT LEADER -> FULL STOP"
+  },
+  {
+   "pdf": "‥",
+   "hwp": "..",
+   "tier": "lookalike",
+   "name": "TWO DOT LEADER -> two FULL STOP"
+  },
+  {
+   "pdf": "×",
+   "hwp": "×",
+   "tier": "measured",
+   "name": "MULTIPLICATION SIGN kept (HWP uses it)"
+  },
+  {
+   "pdf": "±",
+   "hwp": "±",
+   "tier": "measured",
+   "name": "PLUS-MINUS SIGN kept (HWP uses it)"
+  },
+  {
+   "pdf": "“",
+   "hwp": "\"",
+   "tier": "style",
+   "name": "LEFT DOUBLE QUOTATION MARK -> QUOTATION MARK"
+  },
+  {
+   "pdf": "”",
+   "hwp": "\"",
+   "tier": "style",
+   "name": "RIGHT DOUBLE QUOTATION MARK -> QUOTATION MARK"
+  },
+  {
+   "pdf": "‘",
+   "hwp": "'",
+   "tier": "style",
+   "name": "LEFT SINGLE QUOTATION MARK -> APOSTROPHE"
+  },
+  {
+   "pdf": "’",
+   "hwp": "'",
+   "tier": "style",
+   "name": "RIGHT SINGLE QUOTATION MARK -> APOSTROPHE"
+  },
+  {
+   "pdf": "x",
+   "hwp": "×",
+   "tier": "style",
+   "name": "letter x between numbers -> MULTIPLICATION SIGN (never automatic)"
+  },
+  {
+   "pdf": "⁰",
+   "hwp": "⁰",
+   "tier": "style",
+   "name": "SUPERSCRIPT ZERO kept as is (rendered as <sup>/<sub> markup for review)"
+  },
+  {
+   "pdf": "ⁱ",
+   "hwp": "ⁱ",
+   "tier": "style",
+   "name": "SUPERSCRIPT LATIN SMALL LETTER I kept as is (rendered as <sup>/<sub> markup for review)"
+  },
+  {
+   "pdf": "⁴",
+   "hwp": "⁴",
+   "tier": "style",
+   "name": "SUPERSCRIPT FOUR kept as is (rendered as <sup>/<sub> markup for review)"
+  },
+  {
+   "pdf": "⁵",
+   "hwp": "⁵",
+   "tier": "style",
+   "name": "SUPERSCRIPT FIVE kept as is (rendered as <sup>/<sub> markup for review)"
+  },
+  {
+   "pdf": "⁶",
+   "hwp": "⁶",
+   "tier": "style",
+   "name": "SUPERSCRIPT SIX kept as is (rendered as <sup>/<sub> markup for review)"
+  },
+  {
+   "pdf": "⁷",
+   "hwp": "⁷",
+   "tier": "style",
+   "name": "SUPERSCRIPT SEVEN kept as is (rendered as <sup>/<sub> markup for review)"
+  },
+  {
+   "pdf": "⁸",
+   "hwp": "⁸",
+   "tier": "style",
+   "name": "SUPERSCRIPT EIGHT kept as is (rendered as <sup>/<sub> markup for review)"
+  },
+  {
+   "pdf": "⁹",
+   "hwp": "⁹",
+   "tier": "style",
+   "name": "SUPERSCRIPT NINE kept as is (rendered as <sup>/<sub> markup for review)"
+  },
+  {
+   "pdf": "⁺",
+   "hwp": "⁺",
+   "tier": "style",
+   "name": "SUPERSCRIPT PLUS SIGN kept as is (rendered as <sup>/<sub> markup for review)"
+  },
+  {
+   "pdf": "⁻",
+   "hwp": "⁻",
+   "tier": "style",
+   "name": "SUPERSCRIPT MINUS kept as is (rendered as <sup>/<sub> markup for review)"
+  },
+  {
+   "pdf": "⁼",
+   "hwp": "⁼",
+   "tier": "style",
+   "name": "SUPERSCRIPT EQUALS SIGN kept as is (rendered as <sup>/<sub> markup for review)"
+  },
+  {
+   "pdf": "⁽",
+   "hwp": "⁽",
+   "tier": "style",
+   "name": "SUPERSCRIPT LEFT PARENTHESIS kept as is (rendered as <sup>/<sub> markup for review)"
+  },
+  {
+   "pdf": "⁾",
+   "hwp": "⁾",
+   "tier": "style",
+   "name": "SUPERSCRIPT RIGHT PARENTHESIS kept as is (rendered as <sup>/<sub> markup for review)"
+  },
+  {
+   "pdf": "₀",
+   "hwp": "₀",
+   "tier": "style",
+   "name": "SUBSCRIPT ZERO kept as is (rendered as <sup>/<sub> markup for review)"
+  },
+  {
+   "pdf": "₁",
+   "hwp": "₁",
+   "tier": "style",
+   "name": "SUBSCRIPT ONE kept as is (rendered as <sup>/<sub> markup for review)"
+  },
+  {
+   "pdf": "₂",
+   "hwp": "₂",
+   "tier": "style",
+   "name": "SUBSCRIPT TWO kept as is (rendered as <sup>/<sub> markup for review)"
+  },
+  {
+   "pdf": "₃",
+   "hwp": "₃",
+   "tier": "style",
+   "name": "SUBSCRIPT THREE kept as is (rendered as <sup>/<sub> markup for review)"
+  },
+  {
+   "pdf": "₄",
+   "hwp": "₄",
+   "tier": "style",
+   "name": "SUBSCRIPT FOUR kept as is (rendered as <sup>/<sub> markup for review)"
+  },
+  {
+   "pdf": "₅",
+   "hwp": "₅",
+   "tier": "style",
+   "name": "SUBSCRIPT FIVE kept as is (rendered as <sup>/<sub> markup for review)"
+  },
+  {
+   "pdf": "₆",
+   "hwp": "₆",
+   "tier": "style",
+   "name": "SUBSCRIPT SIX kept as is (rendered as <sup>/<sub> markup for review)"
+  },
+  {
+   "pdf": "₇",
+   "hwp": "₇",
+   "tier": "style",
+   "name": "SUBSCRIPT SEVEN kept as is (rendered as <sup>/<sub> markup for review)"
+  },
+  {
+   "pdf": "₈",
+   "hwp": "₈",
+   "tier": "style",
+   "name": "SUBSCRIPT EIGHT kept as is (rendered as <sup>/<sub> markup for review)"
+  },
+  {
+   "pdf": "₉",
+   "hwp": "₉",
+   "tier": "style",
+   "name": "SUBSCRIPT NINE kept as is (rendered as <sup>/<sub> markup for review)"
+  },
+  {
+   "pdf": "₊",
+   "hwp": "₊",
+   "tier": "style",
+   "name": "SUBSCRIPT PLUS SIGN kept as is (rendered as <sup>/<sub> markup for review)"
+  },
+  {
+   "pdf": "₋",
+   "hwp": "₋",
+   "tier": "style",
+   "name": "SUBSCRIPT MINUS kept as is (rendered as <sup>/<sub> markup for review)"
+  },
+  {
+   "pdf": "₌",
+   "hwp": "₌",
+   "tier": "style",
+   "name": "SUBSCRIPT EQUALS SIGN kept as is (rendered as <sup>/<sub> markup for review)"
+  },
+  {
+   "pdf": "₍",
+   "hwp": "₍",
+   "tier": "style",
+   "name": "SUBSCRIPT LEFT PARENTHESIS kept as is (rendered as <sup>/<sub> markup for review)"
+  },
+  {
+   "pdf": "₎",
+   "hwp": "₎",
+   "tier": "style",
+   "name": "SUBSCRIPT RIGHT PARENTHESIS kept as is (rendered as <sup>/<sub> markup for review)"
+  },
+  {
+   "pdf": "²",
+   "hwp": "²",
+   "tier": "style",
+   "name": "SUPERSCRIPT TWO kept as is (rendered as <sup>/<sub> markup for review)"
+  },
+  {
+   "pdf": "³",
+   "hwp": "³",
+   "tier": "style",
+   "name": "SUPERSCRIPT THREE kept as is (rendered as <sup>/<sub> markup for review)"
+  },
+  {
+   "pdf": "¹",
+   "hwp": "¹",
+   "tier": "style",
+   "name": "SUPERSCRIPT ONE kept as is (rendered as <sup>/<sub> markup for review)"
+  }
+ ]
+}

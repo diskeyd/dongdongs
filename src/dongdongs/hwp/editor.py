@@ -1,13 +1,22 @@
 """Hancom Office COM editor (Windows only).
 
 STATUS: written on macOS and NOT YET RUN on Windows. The calls follow the
-HwpAutomation API (HWPFrame.HwpObject). Every write is guarded by read-backs:
-the anchor header cell and the target cell's current text must match the
-reviewed ``before`` value, otherwise the change is skipped, never forced.
+HwpAutomation API (HWPFrame.HwpObject) as wrapped by pyhwpx. Every write is
+guarded by read-backs: the anchor text and the target cell's current content
+must match the reviewed ``before`` value, otherwise the change is skipped,
+never forced.
 
 The original HWP is never opened. ``apply`` copies it to
 ``result/<name>.before.hwp`` and ``result/<name>.processed.hwp`` and edits only
 the processed copy.
+
+Three kinds of change are applied:
+
+* ``set_cell_text``          replace the text of one table cell
+* ``replace_picture``        delete the picture in a cell and insert a PNG at the same size
+* ``fill_oscillogram_page``  rewrite the title line of a graph page and insert its graphs
+                             (width fixed, height squeezed to the planned size); pages that
+                             do not exist yet are made by copying the last graph page
 """
 
 from __future__ import annotations
@@ -18,9 +27,10 @@ import sys
 from pathlib import Path
 
 from ..job import sha256_file
-from .mapping import cell_address
+from .mapping import cell_address, hu_to_mm
 
 _ADDRESS = re.compile(r"\b([A-Z]{1,3})(\d{1,4})\b")
+SIZE_TOLERANCE = 0.01  # 1 % of the planned size
 
 
 class EditorError(RuntimeError):
@@ -41,21 +51,18 @@ def _parse(address: str) -> tuple[int, int]:
     return int(match.group(2)) - 1, col - 1
 
 
+def size_matches(expected: tuple[int, int], found: tuple[int, int], tolerance: float = SIZE_TOLERANCE) -> bool:
+    return all(abs(e - f) <= max(1, e * tolerance) for e, f in zip(expected, found))
+
+
 class HwpEditor:
     def __init__(self, visible: bool = False) -> None:
         if sys.platform != "win32":
             raise EditorError("HWP editing needs Windows with Hancom Office (COM). Run 'apply' on the Windows PC.")
-        import win32com.client
+        from pyhwpx import Hwp  # registers the bundled security module (FilePathCheckerModule) in HKCU
 
-        self.hwp = win32com.client.gencache.EnsureDispatch("HWPFrame.HwpObject")
-        try:
-            self.hwp.RegisterModule("FilePathCheckDLL", "FilePathCheckerModule")
-        except Exception:
-            pass  # without the security module Hancom may ask for confirmation when opening files
-        try:
-            self.hwp.XHwpWindows.Item(0).Visible = visible
-        except Exception:
-            pass
+        self.api = Hwp(new=True, visible=visible, register_module=True)
+        self.hwp = self.api.hwp
 
     # document -----------------------------------------------------------
     def open(self, path: Path) -> None:
@@ -71,6 +78,12 @@ class HwpEditor:
             self.hwp.Clear(1)
         finally:
             self.hwp.Quit()
+
+    def page_count(self) -> int | None:
+        try:
+            return int(self.hwp.PageCount)
+        except Exception:  # noqa: BLE001 - property missing on old versions
+            return None
 
     # navigation ---------------------------------------------------------
     def _run(self, action: str) -> bool:
@@ -133,17 +146,130 @@ class HwpEditor:
         self._run("Cancel")
         return text.replace("\r\n", "\n").strip("\n")
 
+    def insert_text(self, text: str) -> None:
+        action = self.hwp.CreateAction("InsertText")
+        pset = action.CreateSet()
+        action.GetDefault(pset)
+        pset.SetItem("Text", text.replace("\n", "\r\n"))
+        action.Execute(pset)
+
     def set_cell_text(self, text: str) -> None:
         if self.cell_text():
             self._select_cell_content()
             self._run("Delete")
         if text:
-            action = self.hwp.CreateAction("InsertText")
-            pset = action.CreateSet()
-            action.GetDefault(pset)
-            pset.SetItem("Text", text.replace("\n", "\r\n"))
-            action.Execute(pset)
+            self.insert_text(text)
         self._run("Cancel")
+
+    # pictures -----------------------------------------------------------
+    def pictures_in_cell(self) -> list:
+        """Picture controls anchored in the current cell, in document order."""
+        self._run("Cancel")
+        self._run("MoveListBegin")
+        found = []
+        ctrl = self.hwp.HeadCtrl
+        # walk the control chain and keep the pictures whose anchor lies in this list
+        here = self.hwp.GetPos()[0]
+        while ctrl is not None:
+            try:
+                if ctrl.CtrlID == "gso" and ctrl.GetAnchorPos(0).Item("List") == here:
+                    found.append(ctrl)
+            except Exception:  # noqa: BLE001 - controls without anchors
+                pass
+            ctrl = ctrl.Next
+        return found
+
+    def picture_size(self, ctrl) -> tuple[int, int, bool]:
+        prop = ctrl.Properties
+        return int(prop.Item("Width")), int(prop.Item("Height")), bool(prop.Item("TreatAsChar"))
+
+    def delete_ctrl(self, ctrl) -> None:
+        if not self.hwp.DeleteCtrl(ctrl):
+            raise EditorError("could not delete the picture control")
+
+    def insert_picture(self, png: Path, width_hu: int, height_hu: int, treat_as_char: bool = True):
+        """Insert a PNG at the caret at exactly ``width_hu`` x ``height_hu`` HWPUNIT."""
+        ctrl = self.hwp.InsertPicture(
+            Path=str(png),
+            Embedded=True,
+            sizeoption=1,
+            Reverse=False,
+            watermark=False,
+            Effect=0,
+            Width=hu_to_mm(width_hu),
+            Height=hu_to_mm(height_hu),
+        )
+        if not ctrl:
+            raise EditorError(f"InsertPicture failed for {png.name}")
+        prop = ctrl.Properties
+        prop.SetItem("Width", int(width_hu))
+        prop.SetItem("Height", int(height_hu))
+        prop.SetItem("TreatAsChar", 1 if treat_as_char else 0)
+        ctrl.Properties = prop
+        width, height, _ = self.picture_size(ctrl)
+        if not size_matches((width_hu, height_hu), (width, height)):
+            raise EditorError(f"inserted picture is {width}x{height} HWPUNIT, planned {width_hu}x{height_hu}")
+        return ctrl
+
+    def replace_picture(self, png: Path, width_hu: int, height_hu: int, expected_size: tuple[int, int] | None) -> dict:
+        pictures = self.pictures_in_cell()
+        treat_as_char = True
+        if pictures:
+            width, height, treat_as_char = self.picture_size(pictures[0])
+            if expected_size is not None and not size_matches(tuple(expected_size), (width, height)):
+                raise EditorError(f"picture in the cell is {width}x{height}, review saw {expected_size[0]}x{expected_size[1]}")
+            for ctrl in pictures:
+                self.delete_ctrl(ctrl)
+        self._run("MoveListBegin")
+        self.insert_picture(png, width_hu, height_hu, treat_as_char)
+        left = self.pictures_in_cell()
+        if len(left) != 1:
+            raise EditorError(f"{len(left)} pictures in the cell after replacement")
+        return {"width": width_hu, "height": height_hu, "treat_as_char": treat_as_char}
+
+    # graph pages --------------------------------------------------------
+    def copy_current_frame_after_itself(self, copies: int) -> None:
+        """Duplicate the page frame table that holds the caret ``copies`` times right after it."""
+        for _ in range(copies):
+            self._run("Cancel")
+            self._run("TableCellBlock")
+            self._run("TableCellBlockExtend")
+            self._run("TableCellBlockExtend")
+            if not self._run("Copy"):
+                raise EditorError("could not copy the page frame")
+            self._run("Cancel")
+            self._run("CloseEx")  # leave the table
+            self._run("MoveNextParaBegin")
+            if not self._run("Paste"):
+                raise EditorError("could not paste the page frame")
+            self._run("Cancel")
+
+    def fill_graph_page(self, title_before: str, title_after: str, pictures: list[dict]) -> dict:
+        """Rewrite the title line of the current graph-page cell and insert the graphs below it."""
+        current = self.cell_text()
+        if title_before and _norm(title_before) not in _norm(current):
+            raise EditorError(f"graph page title {title_before!r} not found in the cell")
+        for ctrl in self.pictures_in_cell():
+            self.delete_ctrl(ctrl)
+        self._select_cell_content()
+        self._run("Delete")
+        self.insert_text("\n" + title_after + "\n")
+        rows: list[list[dict]] = []
+        for pic in pictures:
+            if pic["layout"] == "half-right" and rows and rows[-1][0]["layout"] == "half-left" and len(rows[-1]) == 1:
+                rows[-1].append(pic)
+            else:
+                rows.append([pic])
+        for index, row in enumerate(rows):
+            if index:
+                self.insert_text("\n")
+            for pic in row:
+                self.insert_picture(Path(pic["png_path"]), pic["width_hwpunit"], pic["height_hwpunit"], treat_as_char=True)
+        self._run("Cancel")
+        found = self.pictures_in_cell()
+        if len(found) != len(pictures):
+            raise EditorError(f"{len(found)} pictures in the graph page after filling, planned {len(pictures)}")
+        return {"title": title_after, "pictures": len(found)}
 
 
 def prepare_result_copies(original: Path, result_dir: Path) -> tuple[Path, Path]:
@@ -160,39 +286,87 @@ def prepare_result_copies(original: Path, result_dir: Path) -> tuple[Path, Path]
     return before, processed
 
 
-def apply_changes(original: Path, result_dir: Path, approved: list[dict], visible: bool = False) -> dict:
+def _goto_anchor(editor: HwpEditor, change: dict) -> None:
+    anchor = change["anchor"]
+    editor.goto_occurrence(anchor["text"], anchor["occurrence"])
+    if editor.current_address() != anchor["address"] or _norm(anchor["text"]) not in _norm(editor.cell_text()):
+        raise EditorError(f"anchor mismatch at {editor.current_address()}")
+
+
+def apply_changes(original: Path, result_dir: Path, approved: list[dict], visible: bool = False, job_root: Path | None = None) -> dict:
     before, processed = prepare_result_copies(original, result_dir)
     editor = HwpEditor(visible=visible)
     log: list[dict] = []
+    pages_before = pages_after = None
+    added_pages: set[int] = set()
     try:
         editor.open(processed)
-        for change in approved:
+        pages_before = editor.page_count()
+        # graph pages that must be created first, in page order, so later anchors still resolve
+        ordered = sorted(approved, key=lambda c: (c["kind"] != "fill_oscillogram_page", c.get("hwp", {}).get("page_no") or 0))
+        for change in ordered:
             entry = {"id": change["id"], "kind": change["kind"]}
-            if change["kind"] != "set_cell_text":
-                entry["apply_status"] = "skipped_not_implemented"
-            elif change.get("no_op") and change["after"] == change["before"]:
-                entry["apply_status"] = "skipped_no_op"
-            else:
-                try:
-                    anchor = change["anchor"]
-                    editor.goto_occurrence(anchor["text"], anchor["occurrence"])
-                    if editor.current_address() != anchor["address"] or _norm(editor.cell_text()) != _norm(anchor["text"]):
-                        raise EditorError(f"anchor mismatch at {editor.current_address()}")
-                    editor.goto_cell(change["hwp"]["address"])
-                    current = editor.cell_text()
-                    if _norm(current) != _norm(change["before"]):
-                        entry.update(apply_status="skipped_before_mismatch", found=current)
+            try:
+                if change["kind"] == "set_cell_text":
+                    if change.get("no_op") and change["after"] == change["before"]:
+                        entry["apply_status"] = "skipped_no_op"
                     else:
-                        editor.set_cell_text(change["after"])
-                        readback = editor.cell_text()
-                        entry.update(apply_status="applied" if _norm(readback) == _norm(change["after"]) else "readback_mismatch", readback=readback)
-                except EditorError as exc:
-                    entry.update(apply_status="error", error=str(exc))
+                        _goto_anchor(editor, change)
+                        editor.goto_cell(change["hwp"]["address"])
+                        current = editor.cell_text()
+                        if _norm(current) != _norm(change["before"]):
+                            entry.update(apply_status="skipped_before_mismatch", found=current)
+                        else:
+                            editor.set_cell_text(change["after"])
+                            readback = editor.cell_text()
+                            entry.update(apply_status="applied" if _norm(readback) == _norm(change["after"]) else "readback_mismatch", readback=readback)
+                elif change["kind"] == "replace_picture":
+                    _goto_anchor(editor, change)
+                    editor.goto_cell(change["hwp"]["address"])
+                    target = change["target"]
+                    png = (job_root / change["after_png"]) if job_root else Path(change["after_png"])
+                    result = editor.replace_picture(png, target["width_hwpunit"], target["height_hwpunit"], tuple(change["hwp"].get("size_hwpunit") or ()) or None)
+                    entry.update(apply_status="applied", inserted=result)
+                elif change["kind"] == "fill_oscillogram_page":
+                    _goto_anchor(editor, change)
+                    editor.goto_cell(change["hwp"]["address"])
+                    copies = int(change["hwp"].get("copies_after_anchor") or 0)
+                    if copies:
+                        # the anchor page is the last existing graph page; make the missing copies once
+                        needed = copies - len([p for p in added_pages if p < change["hwp"]["page_no"]])
+                        if needed > 0:
+                            editor.copy_current_frame_after_itself(needed)
+                            for offset in range(1, needed + 1):
+                                added_pages.add(change["hwp"]["page_no"] - copies + offset)
+                        _goto_anchor(editor, change)
+                        for _ in range(copies):
+                            editor._run("CloseEx")
+                            if not editor.find_forward(change["anchor"]["text"]):
+                                raise EditorError("copied graph page not found after the anchor")
+                            editor._run("Cancel")
+                        editor.goto_cell(change["hwp"]["address"])
+                    pictures = []
+                    for pic in change["pictures"]:
+                        pictures.append({**pic, "png_path": str((job_root / pic["png"]) if job_root else Path(pic["png"]))})
+                    result = editor.fill_graph_page(change["before"], change["after"], pictures)
+                    entry.update(apply_status="applied", inserted=result)
+                else:
+                    entry["apply_status"] = "skipped_not_implemented"
+            except EditorError as exc:
+                entry.update(apply_status="error", error=str(exc))
             log.append({**change, **entry})
+        pages_after = editor.page_count()
         editor.save_as(processed)
     finally:
         editor.close()
-    return {"before_hwp": str(before), "processed_hwp": str(processed), "changes": log}
+    return {
+        "before_hwp": str(before),
+        "processed_hwp": str(processed),
+        "page_count_before": pages_before,
+        "page_count_after": pages_after,
+        "pages_added": sorted(added_pages),
+        "changes": log,
+    }
 
 
-__all__ = ["EditorError", "HwpEditor", "apply_changes", "cell_address", "prepare_result_copies"]
+__all__ = ["EditorError", "HwpEditor", "apply_changes", "cell_address", "prepare_result_copies", "size_matches"]

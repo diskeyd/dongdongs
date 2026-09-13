@@ -1,0 +1,46 @@
+name: 오류 보고
+description: 프로그램이 멈추거나 결과가 이상할 때 씁니다. report.bat 이 만든 zip 을 붙여 주세요.
+title: "[오류] "
+labels: ["오류 보고"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **성적서 PDF, 보고서 HWP, 그림 파일은 절대 첨부하지 마세요.** report.bat 이 만든 zip 에는 그런 파일이 들어가지 않습니다.
+  - type: dropdown
+    id: step
+    attributes:
+      label: 어느 단계에서 문제가 났나요?
+      options:
+        - 설치 (install.bat)
+        - 실행 – 분석 중 (워터마크·표·그래프)
+        - 검수 화면 (브라우저)
+        - 반영 (한글이 열린 뒤)
+        - 결과 파일이 이상함
+        - 잘 모르겠음
+    validations:
+      required: true
+  - type: textarea
+    id: message
+    attributes:
+      label: 화면에 뜬 메시지
+      description: 검은 창이나 브라우저에 나온 글을 그대로 복사해 붙이세요. 사진도 됩니다.
+    validations:
+      required: true
+  - type: input
+    id: page
+    attributes:
+      label: 성적서 몇 쪽과 관련 있나요?
+      placeholder: 예) 22쪽 그래프, 72쪽 표, 모름
+  - type: textarea
+    id: zip
+    attributes:
+      label: report.bat 이 만든 zip
+      description: reports 폴더에 생긴 dongdongs-report-….zip 파일을 이 칸에 끌어다 놓으세요.
+  - type: checkboxes
+    id: confirm
+    attributes:
+      label: 확인
+      options:
+        - label: PDF·HWP·그림 파일은 첨부하지 않았습니다.
+          required: true

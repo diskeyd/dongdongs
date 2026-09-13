@@ -13,6 +13,7 @@ import pymupdf
 
 HAIRLINE = 1.0
 EDGE = 1.0
+STACK_GAP = 5.0  # pt between a full-width graph and the half-width pair below it
 
 
 def _rb(rect) -> list[float]:
@@ -88,14 +89,33 @@ def find_regions(page: pymupdf.Page, cfg: dict) -> list[dict]:
                 "regions_on_page": len(found),
             }
         )
+    titled = [r for r in regions if r["kind_source"] == "title"]
     for region in regions:
         if region["kind"] == "unknown" and region["title"] is None:
-            width = region["bbox"][2] - region["bbox"][0]
-            sibling = next((r for r in regions if r["kind_source"] == "title" and abs((r["bbox"][2] - r["bbox"][0]) - width) <= 2), None)
+            x0, y0, x1, _ = region["bbox"]
+            width = x1 - x0
+            same_width = next((r for r in titled if abs((r["bbox"][2] - r["bbox"][0]) - width) <= 2), None)
+            half_below = next(
+                (r for r in titled if abs((r["bbox"][2] - r["bbox"][0]) / 2 - width) <= 6 and 0 <= y0 - r["bbox"][3] <= STACK_GAP),
+                None,
+            )
+            sibling = same_width or half_below
             if sibling is not None:
                 region["kind"] = sibling["kind"]
-                region["kind_source"] = f"same width as titled region {sibling['index']} on the page"
+                region["kind_source"] = (
+                    f"same width as titled region {sibling['index']} on the page"
+                    if same_width
+                    else f"half-width below titled region {sibling['index']} on the page"
+                )
                 region["export"] = region["kind"] in export
+    widest = max((r["bbox"][2] - r["bbox"][0] for r in regions), default=0)
+    for region in regions:
+        x0, _, x1, _ = region["bbox"]
+        if widest and (x1 - x0) < widest * 0.75:
+            centre = (x0 + x1) / 2
+            region["layout"] = "half-left" if centre < page.rect.width / 2 else "half-right"
+        else:
+            region["layout"] = "full"
     return regions
 
 

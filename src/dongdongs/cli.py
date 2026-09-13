@@ -10,6 +10,8 @@
     dongdongs analyze      --job DIR            (clean + extract + inspect-hwp + map)
     dongdongs review       --job DIR [--port 8765]
     dongdongs apply        --job DIR [--yes]    (Windows + Hancom Office only)
+    dongdongs report       [--job DIR] [--full] (error-report zip, no report data)
+    dongdongs start                             (question-and-answer flow for run.bat)
 
 ``--job`` accepts the job directory or its manifest.json.
 """
@@ -24,6 +26,7 @@ from . import __version__, gemini
 from .config import detect_institution, institution, load_config
 from .environment import collect
 from .job import Job, create_job, open_job, read_json, write_json
+from .support import REPORT_DIR, RunLog, build_report_zip, latest_job, load_env_file, log_directory, project_root
 
 
 def _pages(text: str | None) -> list[int] | None:
@@ -155,7 +158,7 @@ def cmd_verify(args) -> int:
     job.record_step("verify-hwp", passed=result["passed"])
     print(
         f"HWP 검증 {'통과' if result['passed'] else '실패'} · 구조 문제 {len(result['structure_problems'])} · 셀 크기 변화 {len(result['cell_size_changes'])} · "
-        f"예상 밖 텍스트 변화 {len(result['unexpected_text_changes'])} · 반영값 불일치 {len(result['applied_values_not_found'])}"
+        f"예상 밖 텍스트 변화 {len(result['unexpected_text_changes'])} · 반영값 불일치 {len(result['applied_values_not_found'])} · 그림 문제 {len(result['picture_problems'])}"
     )
     return 0 if result["passed"] else 2
 
@@ -227,7 +230,7 @@ def cmd_map(args) -> int:
     inventory = read_json(job.path("hwp_inventory.json"))
     report_path = job.path("watermark_report.json")
     status = {p["page"]: p["status"] for p in read_json(report_path)["pages"]} if report_path.is_file() else {}
-    candidates = build_candidates(extracted, regions, inventory, rules["tables"]["known_sections"], status)
+    candidates = build_candidates(extracted, regions, inventory, rules["tables"]["known_sections"], status, rules.get("pictures"))
     pdf = job.cleaned_pdf if job.cleaned_pdf.is_file() else job.pdf
     for change in candidates["changes"]:
         source = change["source"]
@@ -294,7 +297,7 @@ def cmd_apply(args) -> int:
     if not args.yes and input("계속하시겠습니까? [y/N] ").strip().lower() != "y":
         print("취소했습니다.")
         return 1
-    result = apply_changes(job.hwp, job.path("result"), chosen, visible=args.visible)
+    result = apply_changes(job.hwp, job.path("result"), chosen, visible=args.visible, job_root=job.root)
     write_json(job.path("apply_log.json"), result)
     counts: dict[str, int] = {}
     for change in result["changes"]:
@@ -303,6 +306,27 @@ def cmd_apply(args) -> int:
     print("반영 결과:", counts)
     print("다음: dongdongs verify --stage hwp --job", job.root)
     return 0
+
+
+def cmd_report(args) -> int:
+    job_root = None
+    if args.job:
+        job_root = _job(args).root
+    else:
+        job_root = latest_job(project_root() / "work")
+    out = build_report_zip(job_root, Path(args.out) if args.out else project_root() / REPORT_DIR, full=args.full)
+    print(f"보고서 zip: {out}")
+    if args.full:
+        print("주의: --full 은 성적서 값이 들어 있습니다. 공개 Issue 에 올리지 말고 직접 전달하세요.")
+    else:
+        print("이 zip 에는 로그·환경·단계 기록만 있고 PDF·HWP·그림·값은 없습니다. GitHub Issue 에 끌어다 붙이면 됩니다.")
+    return 0
+
+
+def cmd_start(args) -> int:
+    from .wizard import run
+
+    return run(main)
 
 
 # ------------------------------------------------------------------ parser
@@ -362,6 +386,15 @@ def build_parser() -> argparse.ArgumentParser:
     p = job_parser("apply", cmd_apply, "승인된 변경을 HWP 사본에 반영 (Windows 전용)")
     p.add_argument("--yes", action="store_true")
     p.add_argument("--visible", action="store_true", help="한글 창을 보이게 실행")
+
+    p = sub.add_parser("report", help="오류 보고용 zip 생성 (PDF·HWP·값 제외)")
+    p.add_argument("--job", help="작업 폴더 (기본: 가장 최근 작업)")
+    p.add_argument("--out", help="zip 을 둘 폴더 (기본: reports/)")
+    p.add_argument("--full", action="store_true", help="추출값·후보까지 포함 (공개 Issue 금지)")
+    p.set_defaults(func=cmd_report)
+
+    p = sub.add_parser("start", help="질문에 답하며 처음부터 끝까지 실행 (run.bat)")
+    p.set_defaults(func=cmd_start)
     return parser
 
 
@@ -371,12 +404,40 @@ def main(argv: list[str] | None = None) -> int:
             stream.reconfigure(encoding="utf-8")
         except (AttributeError, ValueError):
             pass
+    load_env_file()
     args = build_parser().parse_args(argv)
+    job_root = None
+    job_arg = getattr(args, "job", None)
+    if job_arg and args.command not in ("report",):
+        candidate = Path(job_arg)
+        candidate = candidate.parent if candidate.name == "manifest.json" else candidate
+        if (candidate / "manifest.json").is_file():
+            job_root = candidate.resolve()
+    log = None
+    if args.command not in ("start", "report"):
+        try:
+            log = RunLog(log_directory(job_root), args.command)
+            log.start()
+        except OSError:
+            log = None
     try:
         return args.func(args) or 0
-    except (FileNotFoundError, FileExistsError, KeyError, RuntimeError) as exc:
+    except SystemExit as exc:
+        if log is not None and exc.code not in (0, None) and not isinstance(exc.code, int):
+            log.write_exception(exc)
+        raise
+    except KeyboardInterrupt:
+        print("\n중단했습니다.")
+        return 130
+    except Exception as exc:  # noqa: BLE001 - every failure must reach the log and the user
+        if log is not None:
+            log.write_exception(exc)
         print(f"오류: {exc}", file=sys.stderr)
+        print("자세한 내용은 logs 폴더의 run-*.log 에 저장했습니다. report.bat 을 실행해 zip 을 만들어 보내 주세요.", file=sys.stderr)
         return 1
+    finally:
+        if log is not None:
+            log.stop()
 
 
 if __name__ == "__main__":

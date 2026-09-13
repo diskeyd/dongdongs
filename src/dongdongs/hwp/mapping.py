@@ -15,7 +15,8 @@ from __future__ import annotations
 import re
 import unicodedata
 
-from .inspector import occurrence_of, tables_with_cell
+from ..config.charmap import to_hwp_text
+from .inspector import occurrence_of, oscillogram_pages, tables_with_cell
 
 
 _SPLIT = re.compile(r"^(?P<label>.*?\S)(?P<gap>[ \t]{2,})(?P<unit>\S(?:.*\S)?)$")
@@ -187,6 +188,13 @@ def _difference_flags(before: str, after: str) -> list[str]:
 
 def _change(change_id, field, table, cell, after, anchor, source, flags, markup=None) -> dict:
     before = cell["text"]
+    extracted = after
+    after, applied = to_hwp_text(after)
+    charmap_flags = [f"charmap_applied:{name}" for name in applied if name not in ("lookalike", "private_glyph_dropped")]
+    if "lookalike" in applied:
+        charmap_flags.append("charmap_lookalike")
+    if "private_glyph_dropped" in applied:
+        charmap_flags.append("private_glyph_dropped")
     return {
         "id": change_id,
         "kind": "set_cell_text",
@@ -195,11 +203,11 @@ def _change(change_id, field, table, cell, after, anchor, source, flags, markup=
         "anchor": anchor,
         "before": before,
         "after": after,
-        "after_extracted": after,
+        "after_extracted": extracted,
         "after_markup": markup,
         "no_op": before.strip() == after.strip(),
         "source": source,
-        "flags": list(flags) + _difference_flags(before, after),
+        "flags": list(flags) + charmap_flags + _difference_flags(before, after),
         "status": "review_required",
     }
 
@@ -314,6 +322,10 @@ def picture_changes(regions: list[dict], inventory: dict, watermark_pages: dict[
         header = next(c for c in table["cells"] if norm(c["text"]) == norm(anchor_text))
         wm = watermark_pages.get(region["page"], "no_watermark")
         blocked = wm == "review_required"
+        fit = fit_picture(region["bbox"], hu_to_mm(picture["width"]), hu_to_mm(picture["height"]))
+        flags = ["watermark_manual_required"] if blocked else []
+        if not 0.5 <= fit["vertical_scale"] <= 1.2:
+            flags.append("vertical_scale_extreme")
         changes.append(
             {
                 "id": f"p{region['page']}-circuit-diagram",
@@ -326,7 +338,9 @@ def picture_changes(regions: list[dict], inventory: dict, watermark_pages: dict[
                     "picture_index": picture["index"],
                     "bindata_id": picture["bindata_id"],
                     "size_hwpunit": [picture["width"], picture["height"]],
+                    "treat_as_char": picture.get("treat_as_char"),
                 },
+                "target": fit,
                 "anchor": {
                     "text": header["text"],
                     "occurrence": occurrence_of(inventory, header["text"], table["index"], header["row"], header["col"]),
@@ -334,7 +348,7 @@ def picture_changes(regions: list[dict], inventory: dict, watermark_pages: dict[
                 },
                 "after_png": region["png"],
                 "source": {"pdf_page": region["page"], "section": region.get("title"), "bbox": region["bbox"], "watermark_status": wm},
-                "flags": ["picture_replacement_not_implemented"] + (["watermark_manual_required"] if blocked else []),
+                "flags": flags,
                 "status": "blocked" if blocked else "review_required",
                 "no_op": False,
             }
@@ -342,7 +356,135 @@ def picture_changes(regions: list[dict], inventory: dict, watermark_pages: dict[
     return changes, warnings
 
 
-def build_candidates(extracted: dict, regions: list[dict], inventory: dict, sections: list[str], watermark_pages: dict[int, str]) -> dict:
+HWPUNIT_PER_MM = 7200 / 25.4
+
+
+def hu_to_mm(value: float) -> float:
+    return round(value / HWPUNIT_PER_MM, 2)
+
+
+def mm_to_hu(value: float) -> int:
+    return int(round(value * HWPUNIT_PER_MM))
+
+
+def fit_picture(bbox, width_mm: float, height_mm: float) -> dict:
+    """Target size for a PDF region drawn at ``width_mm`` wide and at most ``height_mm`` high.
+
+    The width is kept; only the height is squeezed (never stretched), so the
+    vertical scale tells the reviewer how much the graph is compressed.
+    """
+    x0, y0, x1, y1 = bbox
+    natural = width_mm * (y1 - y0) / (x1 - x0)
+    target = min(natural, height_mm)
+    return {
+        "width_mm": round(width_mm, 2),
+        "height_mm": round(target, 2),
+        "natural_height_mm": round(natural, 2),
+        "vertical_scale": round(target / natural, 3) if natural else 1.0,
+        "width_hwpunit": mm_to_hu(width_mm),
+        "height_hwpunit": mm_to_hu(target),
+    }
+
+
+def _graph_rows(regions: list[dict]) -> list[list[dict]]:
+    rows: list[list[dict]] = []
+    for region in sorted(regions, key=lambda r: (r["bbox"][1], r["bbox"][0])):
+        if region.get("layout") == "half-right" and rows and rows[-1][0].get("layout") == "half-left" and len(rows[-1]) == 1:
+            rows[-1].append(region)
+        else:
+            rows.append([region])
+    return rows
+
+
+def plan_oscillogram_pages(regions: list[dict], inventory: dict, cfg: dict, watermark_pages: dict[int, str] | None = None) -> tuple[list[dict], list[str]]:
+    """One candidate per PDF graph page: the HWP page to fill, the title and every graph's target size."""
+    cfg = cfg or {}
+    watermark_pages = watermark_pages or {}
+    by_page: dict[int, list[dict]] = {}
+    for region in regions:
+        if region["kind"] == "oscillogram" and region.get("png"):
+            by_page.setdefault(region["page"], []).append(region)
+    pdf_pages = sorted(by_page)
+    hwp_pages = sorted(oscillogram_pages(inventory, cfg.get("title_pattern", r"^Osc\. \S+$")), key=lambda p: p["page_no"])
+    warnings: list[str] = []
+    if not pdf_pages:
+        return [], warnings
+    if not hwp_pages:
+        return [], [f"{len(pdf_pages)} graph pages in the PDF but no page with an 'Osc.' title in the HWP; graph pages not planned"]
+    if len(pdf_pages) > len(hwp_pages):
+        warnings.append(f"{len(pdf_pages)} graph pages in the PDF, {len(hwp_pages)} in the HWP: {len(pdf_pages) - len(hwp_pages)} pages will be added by copying the last graph page")
+    elif len(pdf_pages) < len(hwp_pages):
+        warnings.append(f"{len(pdf_pages)} graph pages in the PDF, {len(hwp_pages)} in the HWP: the last {len(hwp_pages) - len(pdf_pages)} HWP graph pages keep their old content")
+    inner = float(cfg.get("inner_width_mm", 168.8))
+    gap = float(cfg.get("gap_mm", 1.5))
+    reserved = float(cfg.get("reserved_height_mm", 14.0)) + float(cfg.get("padding_height_mm", 1.0))
+    changes = []
+    last = hwp_pages[-1]
+    for index, page in enumerate(pdf_pages):
+        page_regions = by_page[page]
+        title = next((r["title"] for r in page_regions if r.get("title")), None)
+        if index < len(hwp_pages):
+            target, added = hwp_pages[index], 0
+        else:
+            target, added = last, index - len(hwp_pages) + 1
+        available = hu_to_mm(target["cell_height"]) - reserved
+        rows = _graph_rows(page_regions)
+        row_height = available / len(rows)
+        pictures = []
+        for row in rows:
+            width = inner if len(row) == 1 else (inner - gap) / 2
+            fits = [fit_picture(r["bbox"], width, row_height) for r in row]
+            height = min(f["height_mm"] for f in fits)
+            for region, fit in zip(row, fits):
+                fit = dict(fit, height_mm=round(height, 2), height_hwpunit=mm_to_hu(height), vertical_scale=round(height / fit["natural_height_mm"], 3))
+                pictures.append({"png": region["png"], "pdf_index": region["index"], "layout": region.get("layout", "full"), "bbox": region["bbox"], **fit})
+        wm = watermark_pages.get(page, "no_watermark")
+        flags = []
+        if added:
+            flags.append("page_to_be_added")
+        if any(not 0.5 <= p["vertical_scale"] <= 1.2 for p in pictures):
+            flags.append("vertical_scale_extreme")
+        if title is None:
+            flags.append("pdf_title_missing")
+        if wm == "review_required":
+            flags.append("watermark_manual_required")
+        changes.append(
+            {
+                "id": f"p{page}-graph-page",
+                "kind": "fill_oscillogram_page",
+                "hwp": {
+                    "table": target["table"],
+                    "page_no": target["page_no"] + added,
+                    "row": target["row"],
+                    "col": target["col"],
+                    "address": cell_address(target["row"], target["col"]),
+                    "existing_title": target["title"],
+                    "existing_pictures": len(target["pictures"]),
+                    "page_to_be_added": bool(added),
+                    "copies_after_anchor": added,
+                    "cell_inner_width_mm": inner,
+                    "available_height_mm": round(available, 2),
+                },
+                "anchor": {
+                    "text": target["title"],
+                    "occurrence": occurrence_of(inventory, target["title"], target["table"], target["row"], target["col"]),
+                    "address": cell_address(target["row"], target["col"]),
+                },
+                "before": target["title"] if not added else "",
+                "after": title or "",
+                "after_extracted": title or "",
+                "after_markup": None,
+                "pictures": pictures,
+                "source": {"pdf_page": page, "title": title, "graphs": len(page_regions), "rows": len(rows), "watermark_status": wm},
+                "flags": flags,
+                "status": "blocked" if wm == "review_required" else "review_required",
+                "no_op": False,
+            }
+        )
+    return changes, warnings
+
+
+def build_candidates(extracted: dict, regions: list[dict], inventory: dict, sections: list[str], watermark_pages: dict[int, str], pictures_cfg: dict | None = None) -> dict:
     hwp_tables = section_tables(inventory, sections)
     pdf_tables = [t for t in extracted["tables"] if t["known_section"]]
     pairs = pair_pages(pdf_tables, hwp_tables, sections)
@@ -379,10 +521,15 @@ def build_candidates(extracted: dict, regions: list[dict], inventory: dict, sect
                 changes.extend(got)
                 warnings.extend(notes)
                 warnings.append(f"p{pair['pdf_page']}: section {section!r} is in HWP table {pair['hwp_table']} but not on the PDF page; clearing candidates proposed")
-    picture, picture_notes = picture_changes(regions, inventory, watermark_pages)
+    pictures_cfg = pictures_cfg or {}
+    picture, picture_notes = picture_changes(regions, inventory, watermark_pages, pictures_cfg.get("circuit_anchor", "Circuit components"))
     changes.extend(picture)
     warnings.extend(picture_notes)
-    unmapped = [r for r in regions if r.get("export") and r["kind"] != "circuit_diagram"]
+    pages_planned, page_notes = plan_oscillogram_pages(regions, inventory, pictures_cfg.get("oscillogram_page", {}), watermark_pages)
+    changes.extend(pages_planned)
+    warnings.extend(page_notes)
+    planned = {(pic["png"]) for change in pages_planned for pic in change["pictures"]}
+    unmapped = [r for r in regions if r.get("export") and r["kind"] != "circuit_diagram" and r.get("png") not in planned]
     return {
         "pairs": pairs,
         "changes": changes,

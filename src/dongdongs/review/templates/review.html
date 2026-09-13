@@ -20,6 +20,10 @@
   td.num { white-space:nowrap; font-family:ui-monospace, Consolas, monospace; }
   img.crop { max-width:320px; max-height:90px; border:1px solid var(--line); background:#fff; }
   img.region { max-width:420px; border:1px solid var(--line); background:#fff; }
+  .thumbs { display:flex; flex-wrap:wrap; gap:4px; max-width:420px; }
+  img.thumb { border:1px solid var(--line); background:#fff; max-height:110px; }
+  img.thumb.full { width:100%; max-height:150px; object-fit:contain; }
+  img.thumb.half-left, img.thumb.half-right { width:calc(50% - 2px); object-fit:contain; }
   input.after { width:100%; min-width:120px; font:inherit; padding:3px 5px; }
   .flag { display:inline-block; font-size:11px; padding:1px 6px; margin:1px; border-radius:10px; background:#eef1f8; color:#334; }
   .flag.warn { background:#fff1dd; color:var(--warn); } .flag.bad { background:#fde8e6; color:var(--bad); }
@@ -67,6 +71,16 @@
   {% for p in candidates.pairs %}p{{ p.pdf_page }} → HWP 표 {{ p.hwp_table }} ({{ p.method }}, 라벨 유사도 {{ p.label_similarity }}){% if not loop.last %} · {% endif %}{% endfor %}
 </div>
 
+{% set graph_pages = candidates.changes | selectattr("kind", "equalto", "fill_oscillogram_page") | list %}
+{% if graph_pages %}
+<div class="banner{% if graph_pages | selectattr('hwp.page_to_be_added') | list %} warn{% endif %}">
+  <strong>그래프 쪽 {{ graph_pages|length }}개</strong> — 성적서 그래프 쪽을 한글의 "Osc." 쪽에 같은 배치로 넣습니다.
+  {% set added = graph_pages | selectattr("hwp.page_to_be_added") | list %}
+  {% if added %}한글에 쪽이 모자라 <strong>{{ added|length }}쪽을 마지막 그래프 쪽을 복사해 추가</strong>합니다.{% endif %}
+  가로는 셀 폭에 맞추고 세로만 줄입니다(세로 배율은 각 줄에 표시).
+</div>
+{% endif %}
+
 {% for page, changes in pages %}
 <h2>PDF {{ page }}쪽{% if changes and changes[0].source.printed_page %} ({{ changes[0].source.printed_page }}){% endif %}</h2>
 <div class="wrap">
@@ -80,13 +94,17 @@
       <td>
         {% if c.preview %}<img class="crop" src="/files/{{ c.preview }}" alt="원본 영역">{% endif %}
         {% if c.after_png %}<img class="region" src="/files/{{ c.after_png }}" alt="회로도 PNG">{% endif %}
+        {% if c.kind == "fill_oscillogram_page" %}<div class="thumbs">{% for pic in c.pictures %}<img class="thumb {{ pic.layout }}" loading="lazy" src="/files/{{ pic.png }}" alt="그래프">{% endfor %}</div>{% endif %}
       </td>
-      <td>{{ c.source.section or "" }}<br><strong>{{ c.field or c.kind }}</strong></td>
-      <td class="num">표 {{ c.hwp.table }} · {{ c.hwp.address }}</td>
-      <td class="num">{{ c.before if c.before is defined else "" }}</td>
-      <td class="num">{{ c.after_extracted if c.after_extracted is defined else "" }}{% if c.after_markup %}<br><span class="flag">{{ c.after_markup }}</span>{% endif %}</td>
+      <td>{{ c.source.section or c.source.title or "" }}<br><strong>{% if c.kind == "fill_oscillogram_page" %}그래프 쪽 ({{ c.pictures|length }}장){% elif c.kind == "replace_picture" %}회로도 그림{% else %}{{ c.field }}{% endif %}</strong></td>
+      <td class="num">{% if c.kind == "fill_oscillogram_page" %}{{ c.hwp.page_no }}쪽{% if c.hwp.page_to_be_added %} (추가){% endif %}{% else %}표 {{ c.hwp.table }} · {{ c.hwp.address }}{% endif %}</td>
+      <td class="num">{{ c.before if c.before is defined else "" }}{% if c.kind == "replace_picture" and c.hwp.size_hwpunit %}{{ (c.hwp.size_hwpunit[0] / 283.46) | round(1) }}×{{ (c.hwp.size_hwpunit[1] / 283.46) | round(1) }} mm{% endif %}</td>
+      <td class="num">{{ c.after_extracted if c.after_extracted is defined else "" }}{% if c.after_markup %}<br><span class="flag">{{ c.after_markup }}</span>{% endif %}
+        {% if c.kind == "replace_picture" and c.target %}세로 {{ (c.target.vertical_scale * 100) | round }}%{% endif %}
+        {% if c.kind == "fill_oscillogram_page" %}{% for pic in c.pictures %}<div>{{ pic.layout }} {{ pic.width_mm }}×{{ pic.height_mm }} mm · 세로 {{ (pic.vertical_scale * 100) | round }}%</div>{% endfor %}{% endif %}
+      </td>
       <td class="after-cell">
-        {% if c.kind == "set_cell_text" %}<input class="after" value="{{ after }}">{% else %}그림 교체{% endif %}
+        {% if c.kind == "set_cell_text" %}<input class="after" value="{{ after }}">{% elif c.kind == "replace_picture" %}그림 교체{% if c.target %} {{ c.target.width_mm }}×{{ c.target.height_mm }} mm{% endif %}{% else %}제목 {{ c.after }}<br>그림 {{ c.pictures|length }}장 삽입{% endif %}
       </td>
       <td>
         {% for f in c.flags %}<span class="flag {{ 'bad' if 'watermark' in f or 'not_implemented' in f else 'warn' }}">{{ f }}</span>{% endfor %}

@@ -4,7 +4,9 @@ One report is filled from several test reports that arrive at different times.
 Each job fills only the sections of its own test report. When
 ``verify --stage hwp`` passes, the ledger records those sections and the newest
 processed HWP, so the next job can continue from that file instead of the
-original. Kept in ``work/_reports/<report>.json`` on this PC only; it is not
+original. A section is ``done`` only when nothing of it is left to decide or
+failed; otherwise it is ``partial`` (or ``blocked`` when something could not be
+placed at all). Kept in ``work/_reports/<report>.json`` on this PC only; it is not
 part of the error-report zip.
 """
 
@@ -52,7 +54,19 @@ def usable_latest(ledger: dict | None, work_root: Path) -> Path | None:
     return path
 
 
-def _numbers(no) -> list[int]:
+def parse_numbers(text: str) -> list[int] | None:
+    """'2, 10-12' -> [2, 10, 11, 12] in the order given; None when the text is not numbers, commas and ranges."""
+    if not re.fullmatch(r"\s*\d+(\s*-\s*\d+)?(\s*,\s*\d+(\s*-\s*\d+)?)*\s*", text or ""):
+        return None
+    numbers: list[int] = []
+    for part in text.split(","):
+        start, _, end = part.partition("-")
+        numbers.extend(range(int(start), int(end) + 1) if end.strip() else [int(start)])
+    return numbers
+
+
+def section_numbers(no) -> list[int]:
+    """Report section numbers of a scope: 3 -> [3], "2,3" -> [2, 3], None -> []."""
     if isinstance(no, int):
         return [no]
     return [int(n) for n in str(no).split(",") if n.strip().isdigit()] if no else []
@@ -67,23 +81,25 @@ def update_ledger(job: Job, work_root: Path | None = None) -> tuple[Path, dict]:
     ledger = load_ledger(path) or {"report": report_stem(job.hwp), "created_at": now_kst(), "sections": {}, "history": []}
     for section in candidates.get("hwp_sections") or []:
         ledger["sections"].setdefault(str(section["no"]), {"no": section["no"], "title": section["title"], "code": section.get("code"), "status": "pending"})
-    statuses: dict[str, list[str]] = {}
-    for change in log.get("changes", []):
-        tag = change.get("section") or {}
-        if tag.get("no") is not None:
-            statuses.setdefault(str(tag["no"]), []).append(change.get("apply_status"))
-    blocked = {str((c.get("section") or {}).get("no")) for c in candidates.get("changes", []) if c.get("status") == "blocked" and "no_graph_page_in_section" in c.get("flags", [])}
+    applied = {c["id"]: c.get("apply_status") for c in log.get("changes", [])}
+    approved_path = job.path("approved_changes.json")
+    decisions = {c["id"]: c.get("decision") for c in read_json(approved_path).get("changes", [])} if approved_path.is_file() else {}
     touched: list[int] = []
     for scope in candidates.get("scopes") or []:
-        scope_key = str(scope["no"])
-        for no in _numbers(scope["no"]):
+        changes = [c for c in candidates.get("changes", []) if (c.get("section") or {}).get("key") == scope["key"]]
+        if not any(applied.get(c["id"]) in DONE_STATUSES for c in changes):
+            continue
+        # still open: an item nobody decided on (held), or an approved one that did not go in
+        still_open = [
+            c for c in changes
+            if c.get("status") != "blocked" and not c.get("no_op")
+            and (decisions.get(c["id"]) not in ("approve", "reject") or (decisions.get(c["id"]) == "approve" and applied.get(c["id"]) not in DONE_STATUSES))
+        ]
+        status = "partial" if still_open else "blocked" if any(c.get("status") == "blocked" for c in changes) else "done"
+        for no in section_numbers(scope["no"]):
             entry = ledger["sections"].setdefault(str(no), {"no": no, "title": scope["title"], "code": scope.get("code"), "status": "pending"})
-            done = any(s in DONE_STATUSES for s in statuses.get(scope_key, []))
-            if done:
-                # filled, but graph pages still wait for a page to copy in this section
-                entry["status"] = "blocked" if scope_key in blocked else "done"
-                entry.update(job=manifest["job_id"], at=now_kst())
-                touched.append(no)
+            entry.update(status=status, job=manifest["job_id"], at=now_kst())
+            touched.append(no)
     processed = Path(log["processed_hwp"])
     try:
         stored = str(processed.resolve().relative_to(work_root.resolve()))
@@ -97,7 +113,13 @@ def update_ledger(job: Job, work_root: Path | None = None) -> tuple[Path, dict]:
 
 def section_counts(ledger: dict | None) -> dict[str, int]:
     statuses = [s.get("status", "pending") for s in (ledger or {}).get("sections", {}).values()]
-    return {"total": len(statuses), "done": statuses.count("done"), "blocked": statuses.count("blocked"), "pending": statuses.count("pending")}
+    return {"total": len(statuses), **{name: statuses.count(name) for name in ("done", "partial", "blocked", "pending")}}
+
+
+def status_line(ledger: dict | None) -> str:
+    counts = section_counts(ledger)
+    partial = f" · 일부 {counts['partial']}" if counts["partial"] else ""
+    return f"구역 {counts['total']}개 중 반영 {counts['done']}{partial} · 차단 {counts['blocked']} · 대기 {counts['pending']}"
 
 
 def numbers_with_status(ledger: dict | None, status: str) -> list[int]:
@@ -119,4 +141,4 @@ def compact_numbers(numbers) -> str:
     return ", ".join(parts)
 
 
-__all__ = ["compact_numbers", "ledger_path", "list_ledgers", "load_ledger", "numbers_with_status", "section_counts", "update_ledger", "usable_latest"]
+__all__ = ["compact_numbers", "ledger_path", "list_ledgers", "load_ledger", "numbers_with_status", "parse_numbers", "section_counts", "section_numbers", "status_line", "update_ledger", "usable_latest"]

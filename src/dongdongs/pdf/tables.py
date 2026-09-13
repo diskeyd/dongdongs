@@ -1,7 +1,8 @@
-"""Rule-based table extraction from the PDF text layer (handoff section 7).
+"""Rule-based table extraction from the PDF text layer.
 
-KERI reports draw every table cell as a filled rectangle framed by hairline
-rectangles. Cells are grouped into tables through shared edges, characters are
+Tables are found only where every cell is drawn as a filled rectangle framed by
+hairline rectangles (how KERI reports draw them); a report that draws tables
+with plain lines yields no tables, and ``extract`` warns about it. Cells are grouped into tables through shared edges, characters are
 assigned to cells by their centre point, and text is kept as printed: no number
 parsing, no translation, no unit normalisation.
 """

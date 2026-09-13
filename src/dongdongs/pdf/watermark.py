@@ -1,4 +1,4 @@
-"""Selective deletion of independent watermark objects (handoff section 5).
+"""Selective deletion of independent watermark objects.
 
 Only whole PDF objects are removed: the content-stream block that paints a
 matching image XObject, and the page's resource entry for it. Pixels are never

@@ -14,7 +14,7 @@ import sys
 from pathlib import Path
 
 from .job import read_json
-from .ledger import compact_numbers, ledger_path, list_ledgers, load_ledger, numbers_with_status, section_counts, usable_latest
+from .ledger import compact_numbers, ledger_path, list_ledgers, load_ledger, numbers_with_status, parse_numbers, status_line, usable_latest
 from .support import project_root
 
 
@@ -66,9 +66,8 @@ def _yes(prompt: str, default: bool = False) -> bool:
 
 
 def _ledger_line(ledger: dict) -> str:
-    counts = section_counts(ledger)
-    done = compact_numbers(numbers_with_status(ledger, "done") + numbers_with_status(ledger, "blocked"))
-    return f"구역 {counts['total']}개 중 반영 {counts['done']} · 차단 {counts['blocked']} · 대기 {counts['pending']}" + (f" (반영된 구역: {done})" if done else "")
+    filled = compact_numbers(numbers_with_status(ledger, "done") + numbers_with_status(ledger, "partial") + numbers_with_status(ledger, "blocked"))
+    return status_line(ledger) + (f" (반영된 구역: {filled})" if filled else "")
 
 
 def choose_report(work: Path) -> tuple[Path | None, str | None]:
@@ -94,25 +93,59 @@ def choose_report(work: Path) -> tuple[Path | None, str | None]:
             return path, ledger["latest"]["job"]
 
 
-def confirm_sections(job: Path, argv_main, use_gemini: bool) -> None:
-    """Show which report sections this test report goes to; let the user name them when unknown or wrong."""
-    candidates = read_json(job / "mapping_candidates.json")
-    sections = candidates.get("hwp_sections") or []
-    if not sections:
-        return
-    chosen = ", ".join(f"{s['no']}. {s['title']}" for s in candidates["scopes"] if s["no"] is not None)
-    if candidates["mode"] == "auto":
-        print(f"\n성적서 목록에서 찾은 보고서 구역: {chosen}")
-        if _yes("이 구역들에 넣는 게 맞나요?", default=True):
-            return
-    else:
-        print(f"\n이 성적서의 시험 목록을 찾지 못했습니다. 보고서의 구역 {len(sections)}개:")
-    for section in sections:
-        print(f"  {section['no']:>3}. {section['title']}")
-    answer = input("이 성적서가 채울 구역 번호 (예: 2,3 또는 10-12 · 그냥 Enter면 지금 대응 그대로): ").strip()
-    if not answer:
-        return
-    argv_main(["map", "--job", str(job), "--sections", answer] + (["--use-gemini"] if use_gemini else []))
+def confirm_sections(job: Path, argv_main, use_gemini: bool) -> bool:
+    """Make sure this test report goes to the right report sections. False when the user stops.
+
+    The sections found from the test report's own list are shown for a yes/no.
+    When none were found, or the user says no, the report's sections are listed
+    and numbers must be given; an empty answer is not accepted, because the
+    fallback (whole PDF against whole report) would put graphs in the wrong place.
+    """
+    index_path = job / "sections.json"
+    tests = (read_json(index_path).get("sections") or []) if index_path.is_file() else []
+    while True:
+        candidates = read_json(job / "mapping_candidates.json")
+        sections = candidates.get("hwp_sections") or []
+        if not sections:
+            return True  # the report has no "N. name(code)" headings: the whole document is one scope
+        # whole mode maps the PDF against everything: never offer that as "the sections"
+        scopes = [] if candidates["mode"] == "whole" else (candidates.get("scopes") or [])
+        if scopes:
+            print("\n이 성적서를 넣을 보고서 구역:")
+            for scope in scopes:
+                source = f"  ← 성적서 '{scope['pdf_title']}'" if scope.get("pdf_title") else ""
+                print(f"  {scope['no']}. {scope['title']}{source}")
+            if tests and candidates["mode"] == "auto" and len(scopes) < len(tests):
+                print(f"  성적서 시험 {len(tests)}개 중 {len(scopes)}개만 보고서 구역을 찾았습니다.")
+            if _yes("이 구역들이 맞나요?", default=True):
+                return True
+        elif candidates["mode"] == "auto":
+            print("\n성적서 시험 목록의 이름·코드와 같은 보고서 구역을 찾지 못했습니다.")
+        else:
+            print("\n성적서에서 시험 목록을 찾지 못했습니다. 이 성적서가 채울 보고서 구역을 골라 주세요.")
+        print("보고서 구역:")
+        for section in sections:
+            print(f"  {section['no']:>3}. {section['title']}")
+        if tests:
+            print(f"성적서 시험 {len(tests)}개 — 이 순서대로 구역 번호를 하나씩 적습니다 (넣지 않을 시험은 0):")
+            for number, test in enumerate(tests, start=1):
+                print(f"  {number}) {test['title']}")
+        answer = input(f"구역 번호 ({'예: 2,3,0' if tests else '예: 2,3 또는 10-12'} · 그만두려면 q): ").strip()
+        if answer.lower() == "q":
+            return False
+        numbers = parse_numbers(answer)
+        if not numbers:
+            print("  숫자, 쉼표(,), 범위(-)로 적어 주세요.")
+            continue
+        wrong = sorted({n for n in numbers if n and n not in {s["no"] for s in sections}})
+        if wrong:
+            print(f"  보고서에 없는 구역 번호: {wrong}")
+            continue
+        if tests and len(numbers) != len(tests):
+            print(f"  성적서 시험이 {len(tests)}개라 번호도 {len(tests)}개가 필요합니다 (지금 {len(numbers)}개).")
+            continue
+        if argv_main(["map", "--job", str(job), "--sections", answer] + (["--use-gemini"] if use_gemini else [])):
+            print("  대응을 다시 만들지 못했습니다. 위 메시지를 확인하세요.")
 
 
 def closing_summary(job: Path, work: Path) -> None:
@@ -122,6 +155,9 @@ def closing_summary(job: Path, work: Path) -> None:
     if not ledger:
         return
     print(f"\n보고서 {ledger['report']}: {_ledger_line(ledger)}")
+    partial = numbers_with_status(ledger, "partial")
+    if partial:
+        print(f"  일부만 반영된 구역: {compact_numbers(partial)} — 같은 성적서로 다시 실행해 나머지를 넣으세요.")
     pending = numbers_with_status(ledger, "pending")
     if pending:
         print(f"  아직 성적서가 없는 구역: {compact_numbers(pending)}")
@@ -163,7 +199,9 @@ def run(argv_main) -> int:
     if not hwp:
         print(f"\nHWP 를 지정하지 않아 여기서 끝냅니다. 추출 결과: {job}")
         return 0
-    confirm_sections(Path(job), argv_main, use_gemini)
+    if not confirm_sections(Path(job), argv_main, use_gemini):
+        print("구역을 정하지 않아 여기서 멈춥니다. 다시 실행하면 새 작업으로 시작합니다.")
+        return 0
     print("\n검수 화면을 엽니다. 브라우저에서 승인·수정 후 [저장] 을 누르고, 이 창으로 돌아와 Enter 를 누르세요.")
     _serve_review(Path(job))
     approved = Path(job) / "approved_changes.json"
@@ -179,7 +217,10 @@ def run(argv_main) -> int:
         return 0
     if argv_main(["apply", "--job", job, "--yes", "--visible"]):
         return 1
-    argv_main(["verify", "--job", job, "--stage", "hwp"])
+    if argv_main(["verify", "--job", job, "--stage", "hwp"]):
+        print("\nHWP 검증을 통과하지 못했습니다. 이 결과 파일로 이어서 넣지 말고 report.bat 으로 보고서를 만들어 보내 주세요.")
+        print(f"확인용 결과 폴더: {Path(job) / 'result'}")
+        return 1
     print(f"\n결과 파일: {Path(job) / 'result'} 안의 *.processed.hwp (반영 전 사본은 *.before.hwp)")
     closing_summary(Path(job), work)
     return 0

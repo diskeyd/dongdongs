@@ -1,12 +1,12 @@
-"""Work directory for one PDF job (handoff section 2.3).
+"""Work directory for one test-report PDF.
 
 ::
 
     work/<job-id>/
       manifest.json  environment.json
       pdf_inspection.json  watermark_report.json  verification_clean.json
-      extracted_values.json  regions.json  hwp_inventory.json
-      mapping_candidates.json  approved_changes.json  apply_log.json
+      extracted_values.json  sections.json  regions.json  hwp_inventory.json
+      mapping_candidates.json  approved_changes.json  apply_log.json  verification_hwp.json
       cleaned_pdf/  images/  previews/  logs/  result/
 """
 
@@ -56,10 +56,6 @@ def report_stem(path: Path) -> str:
         stem = trimmed
 
 
-def _slug(text: str) -> str:
-    return re.sub(r"[^0-9A-Za-z._-]+", "-", text).strip("-")[:40] or "job"
-
-
 @dataclass(frozen=True)
 class Job:
     root: Path
@@ -99,14 +95,16 @@ class Job:
 
 
 def create_job(work_root: Path, pdf: Path, hwp: Path | None = None, job_id: str | None = None, parent_job: str | None = None) -> Job:
+    # messages name only the file type: they reach logs and the error-report zip
     pdf = pdf.resolve()
     if not pdf.is_file():
-        raise FileNotFoundError(pdf)
+        raise FileNotFoundError(f"PDF 파일을 찾지 못했습니다 (<file{pdf.suffix.lower()}>)")
     if hwp is not None:
         hwp = hwp.resolve()
         if not hwp.is_file():
-            raise FileNotFoundError(hwp)
-    job_id = job_id or f"{dt.datetime.now(KST):%Y%m%d-%H%M%S}-{_slug(pdf.stem)}"
+            raise FileNotFoundError(f"HWP 파일을 찾지 못했습니다 (<file{hwp.suffix.lower()}>)")
+    # the default name is only the time: a name made from the PDF would carry the customer's file name
+    job_id = job_id or f"{dt.datetime.now(KST):%Y%m%d-%H%M%S}"
     root = (work_root / job_id).resolve()
     if root.exists() and any(root.iterdir()):
         raise FileExistsError(f"job directory is not empty: {root}")

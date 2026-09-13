@@ -43,7 +43,7 @@ def read_test_index(pdf_path: Path, rules: dict | None) -> dict:
     title = rules.get("index_title")
     if not title:
         return {"found": False, "reason": "no sections rule for this institution", "sections": []}
-    code_re = re.compile(rules.get("code_pattern", r"\(([A-Za-z]\w*)\)"))
+    code_re = re.compile(rules.get("code_pattern", r"\(([A-Za-z][A-Za-z0-9_]*)\)"))
     offset = int(rules.get("page_offset", 0))
     with pymupdf.open(pdf_path) as doc:
         page_count = doc.page_count

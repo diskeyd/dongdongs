@@ -1,4 +1,4 @@
-"""Gemini read-assist (handoff section 9). Opt-in only.
+"""Gemini read-assist. Opt-in only.
 
 Only cropped PNGs and short prompts are sent, never whole pages. The key is read
 from ``GEMINI_API_KEY`` and is never logged or written anywhere. Every answer is
@@ -64,15 +64,6 @@ def read_label(png: bytes) -> dict:
         "This image is one cell of an electrical test report table. Transcribe its text exactly. "
         "Mark subscripts as <sub>..</sub> and superscripts as <sup>..</sup>. Do not translate, correct or complete anything. "
         'Return JSON {"text": "plain text", "markup": "text with sub/sup tags", "confidence": "high|medium|low"}.',
-    )
-
-
-def read_footer(png: bytes) -> dict:
-    return _ask_json(
-        png,
-        "This image is the footer of a test report page. Return JSON "
-        '{"printed_page": "text such as 3 of 20", "document_code": "code exactly as printed", "confidence": "high|medium|low"}. '
-        "Use empty strings for anything that is not printed. Do not guess.",
     )
 
 

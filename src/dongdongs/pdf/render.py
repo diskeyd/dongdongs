@@ -1,4 +1,4 @@
-"""Render a region of the cleaned PDF to PNG (handoff section 6.1).
+"""Render a region of the cleaned PDF to PNG.
 
 The clip is the full outline plus a small margin so the border strokes are kept;
 nothing inside the outline is cut and no pixel is modified after rendering.

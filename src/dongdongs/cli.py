@@ -1,13 +1,13 @@
 """Command line interface.
 
-    dongdongs init         --pdf P [--hwp H] [--work-dir work]
+    dongdongs init         --pdf P [--hwp H] [--work-dir work] [--job-id ID] [--parent-job JOB]
     dongdongs inspect-pdf  --job DIR
-    dongdongs clean        --job DIR [--use-gemini] [--verify-dpi 150]
+    dongdongs clean        --job DIR [--use-gemini] [--verify-dpi 150] [--pages 3,5]
     dongdongs verify       --job DIR --stage clean|hwp [--dpi 300]
     dongdongs extract      --job DIR [--pages 3,5]
     dongdongs inspect-hwp  --job DIR
-    dongdongs map          --job DIR [--use-gemini]
-    dongdongs analyze      --job DIR            (clean + extract + inspect-hwp + map)
+    dongdongs map          --job DIR [--sections 2,10-12] [--use-gemini]
+    dongdongs analyze      --job DIR [--sections ...] (clean + extract + inspect-hwp + map)
     dongdongs review       --job DIR [--port 8765]
     dongdongs apply        --job DIR [--yes]    (Windows + Hancom Office only)
     dongdongs report       [--job DIR] [--full] (error-report zip, no report data)
@@ -23,24 +23,20 @@ import sys
 from pathlib import Path
 
 from . import __version__, gemini
-from .config import detect_institution, institution, load_config, report_rules
+from .config import detect_institution, institution, load_config, report_rules, with_defaults
 from .environment import collect
 from .job import Job, create_job, open_job, read_json, write_json
+from .ledger import parse_numbers
 from .support import REPORT_DIR, RunLog, build_report_zip, latest_job, load_env_file, log_directory, project_root
 
 
-def _pages(text: str | None) -> list[int] | None:
+def _numbers(text: str | None) -> list[int] | None:
     if not text:
         return None
-    pages: list[int] = []
-    for part in text.split(","):
-        part = part.strip()
-        if "-" in part:
-            start, end = part.split("-", 1)
-            pages.extend(range(int(start), int(end) + 1))
-        elif part:
-            pages.append(int(part))
-    return pages
+    numbers = parse_numbers(text)
+    if numbers is None:
+        raise SystemExit(f"번호 형식이 틀렸습니다: {text!r} (예: 2,3 또는 10-12)")
+    return numbers
 
 
 def _job(args) -> Job:
@@ -52,7 +48,9 @@ def _rules(job: Job, args) -> tuple[str, dict]:
     config = load_config(Path(args.config) if getattr(args, "config", None) else None)
     name = getattr(args, "institution", None) or job.manifest().get("institution") or detect_institution(job.pdf, config)
     if not name:
-        raise SystemExit("기관을 판별하지 못했습니다. --institution 으로 지정하세요.")
+        # an institution without rules still reaches review: nothing is deleted from the PDF, sections are chosen by hand
+        print("경고: 규칙이 등록된 시험 기관이 아닙니다. 워터마크는 지우지 않고, 보고서 구역은 직접 고릅니다.")
+        return "미등록", with_defaults(config)
     return name, institution(config, name)
 
 
@@ -60,11 +58,11 @@ def _report_rules(args) -> dict:
     return report_rules(load_config(Path(args.config) if getattr(args, "config", None) else None))
 
 
-def _hwp_sections(inventory: dict, args) -> list[dict]:
-    from .hwp.inspector import test_sections
+def _hwp_sections(inventory: dict, args) -> tuple[list[dict], list[str]]:
+    from .hwp.inspector import report_sections
 
     rules = _report_rules(args)
-    return test_sections(inventory, rules["section_heading_pattern"], rules["section_code_pattern"])
+    return report_sections(inventory, rules["section_heading_pattern"], rules["section_code_pattern"])
 
 
 def _rel(job: Job, path: Path) -> str:
@@ -128,7 +126,7 @@ def cmd_clean(args) -> int:
         print("확인 필요 — 워터마크 수동 처리 페이지:", [p["page"] for p in report["pages"] if p["status"] == "review_required"])
     if args.skip_verify:
         return 0
-    result = compare_clean(job.pdf, job.cleaned_pdf, report, rules, dpi=args.verify_dpi, pages=_pages(args.pages))
+    result = compare_clean(job.pdf, job.cleaned_pdf, report, rules, dpi=args.verify_dpi, pages=_numbers(args.pages))
     write_json(job.path("verification_clean.json"), {k: v for k, v in result.items()})
     job.record_step("verify-clean", passed=result["passed"], dpi=args.verify_dpi)
     _print_clean(result)
@@ -150,7 +148,7 @@ def cmd_verify(args) -> int:
 
         _, rules = _rules(job, args)
         report = read_json(job.path("watermark_report.json"))
-        result = compare_clean(job.pdf, job.cleaned_pdf, report, rules, dpi=args.dpi, pages=_pages(args.pages))
+        result = compare_clean(job.pdf, job.cleaned_pdf, report, rules, dpi=args.dpi, pages=_numbers(args.pages))
         write_json(job.path("verification_clean.json"), result)
         job.record_step("verify-clean", passed=result["passed"], dpi=args.dpi)
         _print_clean(result)
@@ -164,18 +162,28 @@ def cmd_verify(args) -> int:
     after = Path(args.after or log["processed_hwp"])
     inv_before = build_inventory(export_xml(before, job.path("logs", "before.xml")), before.name)
     inv_after = build_inventory(export_xml(after, job.path("logs", "processed.xml")), after.name)
-    inv_before["sections"] = _hwp_sections(inv_before, args)
-    inv_after["sections"] = _hwp_sections(inv_after, args)
+    inv_before["sections"], _ = _hwp_sections(inv_before, args)
+    inv_after["sections"], _ = _hwp_sections(inv_after, args)
     result = compare_hwp(inv_before, inv_after, log["changes"], log.get("copies"))
+    # page numbers come from one page frame per page; Hancom's own count tells whether that holds for this report
+    result["warnings"] = [
+        f"{label}: Hancom counts {pages} pages, the inventory {inventory.get('page_count')}; page numbers in this check may be off"
+        for label, pages, inventory in (("before", log.get("page_count_before"), inv_before), ("after", log.get("page_count_after"), inv_after))
+        if pages and inventory.get("page_count") and pages != inventory["page_count"]
+    ]
+    for warning in result["warnings"]:
+        print("  경고:", warning)
     write_json(job.path("verification_hwp.json"), result)
     job.record_step("verify-hwp", passed=result["passed"])
     if result["passed"]:
-        from .ledger import compact_numbers, numbers_with_status, section_counts, update_ledger
+        from .ledger import compact_numbers, numbers_with_status, section_counts, status_line, update_ledger
 
         _, ledger = update_ledger(job)
         counts = section_counts(ledger)
         if counts["total"]:
-            print(f"보고서 장부: 구역 {counts['total']}개 중 반영 {counts['done']} · 차단 {counts['blocked']} · 대기 {counts['pending']}")
+            print(f"보고서 장부: {status_line(ledger)}")
+            if counts["partial"]:
+                print(f"  일부만 반영된 구역 {compact_numbers(numbers_with_status(ledger, 'partial'))}: 보류했거나 반영에 실패한 항목이 있습니다. 같은 성적서로 다시 실행해 나머지를 넣으세요.")
             if counts["blocked"]:
                 print(f"  차단 구역 {compact_numbers(numbers_with_status(ledger, 'blocked'))}: 그래프 쪽이 없어 그래프를 넣지 못했습니다. 한글에서 그 구역 끝에 Osc. 쪽 하나를 복사해 넣고 같은 성적서로 다시 실행하세요.")
     else:
@@ -199,13 +207,15 @@ def cmd_extract(args) -> int:
     if not verified and not args.allow_unverified:
         raise SystemExit("clean 단계와 무변형 검증이 먼저 통과해야 합니다 (--allow-unverified 로 우회 가능).")
     pdf = job.cleaned_pdf if job.cleaned_pdf.is_file() else job.pdf
-    pages = _pages(args.pages)
+    pages = _numbers(args.pages)
     extracted = extract_document(pdf, rules["tables"]["known_sections"], pages)
     extracted["pdf"] = job.pdf.name
     extracted["extracted_from"] = pdf.name
     for table in extracted["tables"]:
         table["source"]["pdf"] = job.pdf.name
     write_json(job.path("extracted_values.json"), extracted)
+    if rules["tables"].get("known_sections") and not extracted["tables"]:
+        print(f"  경고: 표를 하나도 찾지 못했습니다. 표 머리({', '.join(rules['tables']['known_sections'])})나 표를 그리는 방식이 이 성적서와 다를 수 있습니다.")
 
     from .pdf.sections import read_test_index
 
@@ -243,10 +253,12 @@ def cmd_inspect_hwp(args) -> int:
         raise SystemExit("이 작업에는 HWP가 지정되지 않았습니다 (init --hwp).")
     _, rules = _rules(job, args)
     inventory = build_inventory(export_xml(job.hwp, job.path("logs", "hwp_structure.xml")), job.hwp.name)
-    inventory["sections"] = _hwp_sections(inventory, args)
+    inventory["sections"], inventory["section_warnings"] = _hwp_sections(inventory, args)
     write_json(job.path("hwp_inventory.json"), inventory)
     job.record_step("inspect-hwp", tables=inventory["table_count"], pictures=inventory["picture_count"])
     print(f"HWP 표 {inventory['table_count']} · 그림 {inventory['picture_count']} · 셀 {inventory['cell_count']} · 시험 구역 {len(inventory['sections'])}")
+    for warning in inventory["section_warnings"]:
+        print("  경고:", warning)
     for section in rules["tables"]["known_sections"]:
         print(f"  '{section}' 머리 셀이 있는 표: {[t['index'] for t in tables_with_cell(inventory, section)]}")
     return 0
@@ -266,11 +278,12 @@ def cmd_map(args) -> int:
     status = {p["page"]: p["status"] for p in read_json(report_path)["pages"]} if report_path.is_file() else {}
     index_path = job.path("sections.json")
     pdf_index = read_json(index_path) if index_path.is_file() else None
-    hwp_sections = inventory.get("sections")
+    hwp_sections, section_warnings = inventory.get("sections"), inventory.get("section_warnings") or []
     if hwp_sections is None:
-        hwp_sections = _hwp_sections(inventory, args)
-    manual = _pages(getattr(args, "sections", None))
+        hwp_sections, section_warnings = _hwp_sections(inventory, args)
+    manual = _numbers(getattr(args, "sections", None))
     candidates = build_candidates(extracted, regions, inventory, rules["tables"]["known_sections"], status, rules.get("pictures"), pdf_index, hwp_sections, manual)
+    candidates["warnings"][:0] = section_warnings
     pdf = job.cleaned_pdf if job.cleaned_pdf.is_file() else job.pdf
     for change in candidates["changes"]:
         source = change["source"]
@@ -294,7 +307,7 @@ def cmd_map(args) -> int:
     print(f"후보 {len(candidates['changes'])}건 (실제 변경 {changed}) · 경고 {len(candidates['warnings'])} · 미대응 그래프 {len(candidates['unmapped_regions'])}")
     how = {"auto": "성적서 목록으로 자동", "user": "사람이 지정", "whole": "구역 구분 없이 문서 전체"}[candidates["mode"]]
     print(f"대응 구역 ({how}): " + (", ".join(f"{s['no']}. {s['title']}" for s in candidates["scopes"]) or "없음"))
-    if candidates["pending_sections"]:
+    if candidates["pending_sections"] and candidates["scopes"]:
         print(f"이 성적서에 없는 보고서 구역 {len(candidates['pending_sections'])}개는 손대지 않습니다.")
     for warning in candidates["warnings"]:
         print("  경고:", warning)

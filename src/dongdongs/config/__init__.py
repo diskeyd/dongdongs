@@ -8,7 +8,7 @@ from pathlib import Path
 import pymupdf
 import yaml
 
-from .charmap import load_charmap, nfkc_equal, to_hwp_text
+from .charmap import load_charmap, to_hwp_text
 
 
 def load_config(path: Path | None = None) -> dict:
@@ -19,12 +19,21 @@ def load_config(path: Path | None = None) -> dict:
     return yaml.safe_load(text)
 
 
+def with_defaults(config: dict, own: dict | None = None) -> dict:
+    """Rules of one institution on top of ``defaults``; dict-valued keys (tables, regions, pictures) merge one level deep."""
+    rules = {k: (dict(v) if isinstance(v, dict) else v) for k, v in (config.get("defaults") or {}).items()}
+    for k, v in (own or {}).items():
+        rules[k] = {**rules[k], **v} if isinstance(v, dict) and isinstance(rules.get(k), dict) else v
+    return rules
+
+
 def institution(config: dict, name: str) -> dict:
     try:
-        return config["institutions"][name]
+        own = config["institutions"][name]
     except KeyError as exc:
         known = ", ".join(config.get("institutions", {}))
         raise KeyError(f"unknown institution {name!r}; configured: {known}") from exc
+    return with_defaults(config, own)
 
 
 REPORT_DEFAULTS = {
@@ -50,4 +59,4 @@ def detect_institution(pdf_path: Path, config: dict) -> str | None:
     return None
 
 
-__all__ = ["detect_institution", "institution", "load_charmap", "load_config", "nfkc_equal", "report_rules", "to_hwp_text"]
+__all__ = ["detect_institution", "institution", "load_charmap", "load_config", "report_rules", "to_hwp_text", "with_defaults"]

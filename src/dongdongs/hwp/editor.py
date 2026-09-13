@@ -281,7 +281,7 @@ def prepare_result_copies(original: Path, result_dir: Path) -> tuple[Path, Path]
     before = result_dir / f"{report_stem(original)}.before.hwp"
     processed = result_dir / f"{report_stem(original)}.processed.hwp"
     if before.exists() or processed.exists():
-        raise EditorError(f"result copies already exist in {result_dir}; start a new job instead of overwriting")
+        raise EditorError("결과 파일이 이미 있습니다. 덮어쓰지 않으니 새 작업으로 다시 실행하세요")
     digest = sha256_file(original)
     shutil.copy2(original, before)
     shutil.copy2(original, processed)
@@ -375,6 +375,12 @@ def apply_changes(original: Path, result_dir: Path, approved: list[dict], visibl
                     entry["apply_status"] = "skipped_not_implemented"
             except EditorError as exc:
                 entry.update(apply_status="error", error=str(exc))
+            except Exception as exc:  # noqa: BLE001 - unknown Hancom failure: stop editing, save what is done
+                entry.update(apply_status="error", error=f"{type(exc).__name__}: {exc}")
+                log.append({**change, **entry})
+                done = {e["id"] for e in log}
+                log.extend({**c, "apply_status": "skipped_after_error"} for c in ordered if c["id"] not in done)
+                break
             log.append({**change, **entry})
         pages_after = editor.page_count()
         editor.save_as(processed)

@@ -1,4 +1,4 @@
-"""Local review server (handoff section 10).
+"""Local review server.
 
 Binds to 127.0.0.1 only. Serves the review page, evidence crops and region
 PNGs from the job directory, and writes the reviewer's decisions to
@@ -21,6 +21,7 @@ from jinja2 import Environment, select_autoescape
 
 from ..environment import now_kst
 from ..job import Job, read_json, write_json
+from ..ledger import compact_numbers, ledger_path, load_ledger, section_numbers
 
 SERVED_DIRS = ("previews", "images")
 DECISIONS = ("approve", "reject", "hold")
@@ -35,13 +36,6 @@ def _template():
 def _optional(job: Job, name: str):
     path = job.path(name)
     return read_json(path) if path.is_file() else None
-
-
-def _scope_numbers(scope: dict) -> list[int]:
-    no = scope.get("no")
-    if isinstance(no, int):
-        return [no]
-    return [int(n) for n in str(no).split(",") if n.strip().isdigit()] if no else []
 
 
 def _section_groups(candidates: dict) -> list[dict]:
@@ -82,13 +76,10 @@ def render_page(job: Job) -> str:
     groups = _section_groups(candidates)
     ledger = None
     if job.hwp is not None:
-        from ..ledger import ledger_path, load_ledger
-
         ledger = load_ledger(ledger_path(job.root.parent, job.hwp))
-    from ..ledger import compact_numbers
 
-    this_job = {n for s in candidates.get("scopes") or [] for n in _scope_numbers(s)}
-    previous = sorted(int(no) for no, s in ((ledger or {}).get("sections") or {}).items() if s.get("status") in ("done", "blocked") and int(no) not in this_job)
+    this_job = {n for s in candidates.get("scopes") or [] for n in section_numbers(s.get("no"))}
+    previous = sorted(int(no) for no, s in ((ledger or {}).get("sections") or {}).items() if s.get("status") in ("done", "partial", "blocked") and int(no) not in this_job)
     return _template().render(
         manifest=job.manifest(),
         candidates=candidates,

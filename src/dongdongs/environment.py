@@ -1,4 +1,4 @@
-"""Environment probe written to ``environment.json`` (handoff section 12).
+"""Environment probe written to ``environment.json``.
 
 Only facts needed to reproduce a run are recorded: OS, Python, dependency
 versions, Hancom COM availability and whether a Gemini key is present.

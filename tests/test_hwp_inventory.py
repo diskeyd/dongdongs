@@ -50,10 +50,10 @@ def test_oscillogram_slot_tables(inventory, expected):
 
 def test_report_sections_and_their_graph_pages(inventory, expected):
     from dongdongs.config import load_config, report_rules
-    from dongdongs.hwp.inspector import oscillogram_pages, test_sections
+    from dongdongs.hwp.inspector import oscillogram_pages, report_sections
 
     rules = report_rules(load_config())
-    sections = test_sections(inventory, rules["section_heading_pattern"], rules["section_code_pattern"])
+    sections, _ = report_sections(inventory, rules["section_heading_pattern"], rules["section_code_pattern"])
     e = expected["hwp"]
     assert len(sections) == e["sections_total"] and [s["no"] for s in sections] == list(range(1, e["sections_total"] + 1))
     by_no = {s["no"]: s for s in sections}

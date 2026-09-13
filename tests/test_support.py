@@ -70,6 +70,12 @@ def test_full_report_includes_values_and_is_labelled(tmp_path, monkeypatch):
         assert "공개 이슈에 올리지 말 것" in zf.read("report.txt").decode("utf-8")
 
 
+def test_redact_hides_any_data_file_path():
+    assert redact_text("오류: C:\\Users\\me\\Downloads\\고객 성적서.PDF 없음", {}) == "오류: <file.pdf> 없음"
+    assert redact_text("열기 ~/work/a b.processed.hwp", {}) == "열기 <file.hwp>"
+    assert redact_text("검수 화면 주소: http://127.0.0.1:8765/", {}) == "검수 화면 주소: http://127.0.0.1:8765/"
+
+
 def test_latest_job_and_redact():
     assert redact_text("GEMINI_API_KEY=abc", {}) == "GEMINI_API_KEY=<redacted>"
     assert latest_job(__import__("pathlib").Path("/nonexistent")) is None

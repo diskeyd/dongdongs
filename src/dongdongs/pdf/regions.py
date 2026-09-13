@@ -1,4 +1,4 @@
-"""Graph and diagram regions bounded by a drawn rectangular outline (handoff section 6).
+"""Graph and diagram regions bounded by a drawn rectangular outline.
 
 A region is a large filled rectangle plus the hairline rectangles that draw its
 border. The title printed just above the outline is recorded but never part of

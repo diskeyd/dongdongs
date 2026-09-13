@@ -161,12 +161,21 @@ def _placeholders(manifest: dict | None) -> dict[str, str]:
     return dict(sorted(names.items(), key=lambda kv: -len(kv[0])))
 
 
+# a path ending in a data file (C:\..\x.pdf, ~/../x.hwp, /../x.png); names may hold spaces, so it runs to the suffix
+_DATA_PATH = re.compile(
+    r"(?:[A-Za-z]:[\\/]|~[\\/]|(?<![\w.:<])/)[^\n\"'<>|]*?\.(" + "|".join(sorted(s.lstrip(".") for s in DATA_SUFFIXES)) + r")\b",
+    re.IGNORECASE,
+)
+
+
 def redact_text(text: str, names: dict[str, str]) -> str:
     for name, placeholder in names.items():
         text = text.replace(name, placeholder)
     home = str(Path.home())
     if home:
         text = text.replace(home, "~")
+    # paths of other jobs' files are not in ``names`` (project logs cover every run)
+    text = _DATA_PATH.sub(lambda m: f"<file.{m.group(1).lower()}>", text)
     for key in SECRET_KEYS:
         text = re.sub(rf"({key}\s*=\s*)\S+", r"\1<redacted>", text)
     return text

@@ -2,7 +2,7 @@
 #
 # Watermark rules describe independent PDF objects that may be deleted. A page
 # is changed only when every condition of a rule holds; anything else is left
-# untouched and reported as review_required (handoff sections 5.4 and 5.5).
+# untouched and reported as review_required.
 #
 # Supported watermark kinds: image_xobject. Other kinds are reported as
 # unsupported and never delete anything.
@@ -13,8 +13,46 @@
 report:
   # a space after the dot is required, so "25.8kV ..." never starts a section
   section_heading_pattern: "^(\\d{1,3})\\.\\s+(\\S.*)$"
-  # only a Latin code in brackets counts as a test code ("(TDload2)" yes, "(일반)" no)
+  # only a Latin code in brackets counts as a test code ("(ABC12)" yes, "(일반)" no)
   section_code_pattern: "\\(([A-Za-z][A-Za-z0-9_]*)\\)\\s*$"
+
+# Rules every institution starts from. An institution below overrides only
+# what differs (tables, regions and pictures merge key by key); a test report
+# from an institution that is not listed uses these alone, deletes no
+# watermark and has its report sections chosen by hand.
+defaults:
+  tables:
+    known_sections: ["Supply circuit", "Load circuit", "Prospective TRV"]
+
+  regions:
+    # half-width graphs (two side by side under a full-width one) are ~240 pt wide
+    min_width_pt: 200
+    min_height_pt: 100
+    title_gap_pt: 22
+    kinds:
+      "시험회로도": circuit_diagram
+      "Osc.": oscillogram
+      "사진": photo
+    export_kinds: [circuit_diagram, oscillogram]
+    dpi: 300
+
+  pictures:
+    # header cell text of the table whose first cell holds the circuit diagram
+    circuit_anchor: "Circuit components"
+    # graph pages: one big cell per page with a title line and the graphs below it
+    oscillogram_page:
+      title_pattern: "^Osc\\. \\S+$"
+      # left + right padding of the big cell, mm (the graphs get the cell width minus this)
+      padding_width_mm: 3.6
+      # space between the two half-width graphs, mm (slack so the pair never wraps)
+      gap_mm: 1.5
+      # title line, blank lines and paragraph spacing above the graphs, mm
+      reserved_height_mm: 14.0
+      # cell top/bottom padding, mm
+      padding_height_mm: 1.0
+    # oscillogram tables (picture cells under a header cell); filled with the graphs no graph page took
+    oscillogram_slots:
+      header_text: "오실로그램"
 
 institutions:
   KERI:
@@ -56,36 +94,3 @@ institutions:
       page_offset: 0
       # table-of-contents entries that follow the last test (its end = their page - 1)
       end_titles: ["도면", "첨부", "안내문"]
-
-    tables:
-      known_sections: ["Supply circuit", "Load circuit", "Prospective TRV"]
-
-    regions:
-      # half-width graphs (two side by side under a full-width one) are ~240 pt wide
-      min_width_pt: 200
-      min_height_pt: 100
-      title_gap_pt: 22
-      kinds:
-        "시험회로도": circuit_diagram
-        "Osc.": oscillogram
-        "사진": photo
-      export_kinds: [circuit_diagram, oscillogram]
-      dpi: 300
-
-    pictures:
-      # header cell text of the table whose first cell holds the circuit diagram
-      circuit_anchor: "Circuit components"
-      # graph pages: one big cell per page with a title line and the graphs below it
-      oscillogram_page:
-        title_pattern: "^Osc\\. \\S+$"
-        # inside width of the big cell (cell width minus left/right padding), mm
-        inner_width_mm: 168.8
-        # space between the two half-width graphs, mm (slack so the pair never wraps)
-        gap_mm: 1.5
-        # title line, blank lines and paragraph spacing above the graphs, mm
-        reserved_height_mm: 14.0
-        # cell top/bottom padding, mm
-        padding_height_mm: 1.0
-      # oscillogram tables (picture cells under a header cell); filled with the graphs no graph page took
-      oscillogram_slots:
-        header_text: "오실로그램"

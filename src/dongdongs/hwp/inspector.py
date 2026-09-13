@@ -152,16 +152,44 @@ def tables_with_cell(inventory: dict, text: str, pages=None) -> list[dict]:
     return [t for t in inventory["tables"] if _in_pages(t, pages) and any(c["text"].strip().casefold() == wanted for c in t["cells"])]
 
 
-def test_sections(inventory: dict, heading_pattern: str = r"^(\d{1,3})\.\s+(\S.*)$", code_pattern: str = r"\(([A-Za-z][A-Za-z0-9_]*)\)\s*$") -> list[dict]:
-    """Test sections of the report, from page cells whose first line reads ``N. name(code)``.
+def _longest_run(matches: list[dict]) -> list[dict]:
+    """Longest chain of strictly increasing section numbers, in document order.
 
-    Numbers must run on by one, so a stray numbered line in body text does not
-    start a section. A section runs to the page before the next one starts; the
-    last runs to the end of the document. Returns [] when the report has no such
+    Ties go to the chain with the smallest number gaps, then to the earliest
+    lines, so a stray "3." before the real "1. 2. 3." or a numbered note inside a
+    section never replaces a real heading.
+    """
+    best: list[tuple[int, int, int | None]] = [(0, 0, None)] * len(matches)
+    for i in range(len(matches) - 1, -1, -1):
+        length, gaps, following = 1, 0, None
+        for j in range(i + 1, len(matches)):
+            if matches[j]["no"] <= matches[i]["no"]:
+                continue
+            cand = (best[j][0] + 1, best[j][1] + matches[j]["no"] - matches[i]["no"] - 1)
+            if cand[0] > length or (cand[0] == length and cand[1] < gaps):
+                length, gaps, following = cand[0], cand[1], j
+        best[i] = (length, gaps, following)
+    if not matches:
+        return []
+    start = min(range(len(matches)), key=lambda i: (-best[i][0], best[i][1], i))
+    chain, at = [], start
+    while at is not None:
+        chain.append(matches[at])
+        at = best[at][2]
+    return chain
+
+
+def report_sections(inventory: dict, heading_pattern: str = r"^(\d{1,3})\.\s+(\S.*)$", code_pattern: str = r"\(([A-Za-z][A-Za-z0-9_]*)\)\s*$") -> tuple[list[dict], list[str]]:
+    """Test sections of the report, from page cells whose first line reads ``N. name(code)``, and warnings.
+
+    The headings kept are the longest run of increasing numbers (see
+    ``_longest_run``); lines left out and numbers skipped are reported. A
+    section runs to the page before the next one starts; the last runs to the
+    end of the document. Returns no sections when the report has no such
     headings (then the whole document is one scope).
     """
     heading, code_re = re.compile(heading_pattern), re.compile(code_pattern)
-    starts: list[dict] = []
+    matches: list[dict] = []
     frames = sorted((t for t in inventory["tables"] if t.get("depth") == 0 and t.get("page_no")), key=lambda t: (t["page_no"], t["index"]))
     for table in frames:
         for cell in sorted(table["cells"], key=lambda c: (c["row"], c["col"])):
@@ -169,14 +197,11 @@ def test_sections(inventory: dict, heading_pattern: str = r"^(\d{1,3})\.\s+(\S.*
             match = heading.match(first)
             if not match:
                 continue
-            no = int(match.group(1))
-            if starts and no != starts[-1]["no"] + 1:
-                continue
             title = " ".join(match.group(2).split())
             code = code_re.search(title)
-            starts.append(
+            matches.append(
                 {
-                    "no": no,
+                    "no": int(match.group(1)),
                     "title": title,
                     "name": title[: code.start()].strip() if code else title,
                     "code": code.group(1) if code else None,
@@ -184,15 +209,20 @@ def test_sections(inventory: dict, heading_pattern: str = r"^(\d{1,3})\.\s+(\S.*
                     "table": table["index"],
                 }
             )
+    starts = _longest_run(matches)
+    warnings: list[str] = []
+    dropped = [m for m in matches if m not in starts]
+    if dropped:
+        warnings.append(f"{len(dropped)} numbered lines were not taken as section headings (pages {sorted({m['page_from'] for m in dropped})})")
+    skipped = [n for a, b in zip(starts, starts[1:]) for n in range(a["no"] + 1, b["no"])]
+    if skipped:
+        warnings.append(f"report section numbers {skipped} were not found; check the section list")
     last_page = inventory.get("page_count") or max((t.get("page_no") or 0 for t in inventory["tables"]), default=0)
     for current, following in zip(starts, starts[1:]):
         current["page_to"] = max(current["page_from"], following["page_from"] - 1)
     if starts:
         starts[-1]["page_to"] = max(starts[-1]["page_from"], last_page)
-    return starts
-
-
-test_sections.__test__ = False
+    return starts, warnings
 
 
 def occurrence_of(inventory: dict, text: str, table: int, row: int, col: int) -> int | None:
@@ -230,6 +260,8 @@ def oscillogram_pages(inventory: dict, title_pattern: str = r"^Osc\. \S+$", page
                     "row": cell["row"],
                     "col": cell["col"],
                     "title": title,
+                    # lines besides the title (a caption, test conditions): filling the page would erase them
+                    "other_lines": sum(1 for line in lines if line and line != title),
                     "cell_width": cell["width"],
                     "cell_height": cell["height"],
                     "pictures": [p["index"] for p in pictures],
@@ -284,11 +316,3 @@ def picture_slots(inventory: dict, header_text: str = "오실로그램", pages=N
             )
     return slots
 
-
-def structure_signature(inventory: dict) -> dict:
-    return {
-        "table_count": inventory["table_count"],
-        "picture_count": inventory["picture_count"],
-        "tables": [[t["rows"], t["cols"], len(t["cells"])] for t in inventory["tables"]],
-        "pictures": [[p["width"], p["height"]] for p in inventory["pictures"]],
-    }

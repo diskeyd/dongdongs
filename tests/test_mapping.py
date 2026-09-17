@@ -214,5 +214,20 @@ def test_untitled_oscillograms_go_to_slot_tables_in_order():
     changes, warnings = plan_picture_slots(titled + untitled, slots, {}, used)
     assert [c["after_png"] for c in changes] == ["images/p030-0.png", "images/p030-1.png"]
     assert changes[0]["hwp"]["address"] == "A2" and changes[0]["anchor"]["text"] == "오실로그램" and "slot_paired_by_order" in changes[0]["flags"]
-    assert changes[0]["target"]["scale"] < 1 and abs(changes[0]["target"]["width_mm"] / changes[0]["target"]["height_mm"] - 480 / 327) < 0.01
+    # a picture that takes over an existing box keeps the box width; only its height moves
+    target, box = changes[0]["target"], changes[0]["hwp"]["size_hwpunit"]
+    assert target["mode"] == "width" and abs(target["width_hwpunit"] - box[0]) <= 2 and target["height_hwpunit"] <= box[1]
+    assert target["height_squeezed"] == (target["height_hwpunit"] == box[1])
     assert warnings[0].startswith("HWP 오실로그램 칸 4개, PDF 미배정 그래프 2장")
+
+
+def test_a_replacement_picture_keeps_the_box_width():
+    """Round 2 feedback (2026-09-17): the diagram must keep the report's layout width."""
+    from dongdongs.hwp.mapping import fit_picture
+
+    wide = fit_picture([0, 0, 480, 120], 100.0, 60.0, mode="width")
+    assert wide["width_mm"] == 100.0 and not wide["height_squeezed"] and wide["height_mm"] < 60
+    tall = fit_picture([0, 0, 480, 600], 100.0, 60.0, mode="width")
+    assert tall["width_mm"] == 100.0 and tall["height_mm"] == 60.0 and tall["height_squeezed"]
+    kept = fit_picture([0, 0, 480, 600], 100.0, 60.0)
+    assert abs(kept["width_mm"] / kept["height_mm"] - 480 / 600) < 0.01

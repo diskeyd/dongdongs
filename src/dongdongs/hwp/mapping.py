@@ -322,10 +322,11 @@ def picture_changes(regions: list[dict], inventory: dict, watermark_pages: dict[
         header = next(c for c in table["cells"] if norm(c["text"]) == norm(anchor_text))
         wm = watermark_pages.get(region["page"], "no_watermark")
         blocked = wm == "review_required"
-        fit = fit_picture(region["bbox"], hu_to_mm(picture["width"]), hu_to_mm(picture["height"]))
+        # the diagram takes the place of an existing picture: keep its width, change only the height
+        fit = fit_picture(region["bbox"], hu_to_mm(picture["width"]), hu_to_mm(picture["height"]), mode="width")
         flags = ["watermark_manual_required"] if blocked else []
-        if fit["fill_ratio"] is not None and fit["fill_ratio"] < SMALL_FILL_RATIO:
-            flags.append("picture_small_in_box")
+        if fit["height_squeezed"]:
+            flags.append("picture_height_squeezed")
         changes.append(
             {
                 "id": f"p{region['page']}-circuit-diagram",
@@ -376,22 +377,35 @@ def natural_size_mm(bbox) -> tuple[float, float]:
     return (x1 - x0) / PT_PER_MM, (y1 - y0) / PT_PER_MM
 
 
-def fit_picture(bbox, box_width_mm: float, box_height_mm: float, scale: float | None = None) -> dict:
+def fit_picture(bbox, box_width_mm: float, box_height_mm: float, scale: float | None = None, mode: str = "ratio") -> dict:
     """Target size for a PDF region inside a ``box_width_mm`` x ``box_height_mm`` box.
 
-    The PDF aspect ratio is kept: one uniform ``scale`` (the largest that fits the
-    box, unless given) is applied to both sides. ``fill_ratio`` tells the reviewer
-    how much of the box the picture covers.
+    ``ratio`` keeps the PDF aspect ratio with one uniform ``scale`` (the largest
+    that fits, unless given) — graph pages, where several pictures share a page.
+    ``width`` keeps the box width so the report layout does not move and changes
+    only the height — a picture that replaces an existing one in its own box
+    (circuit diagram, oscillogram slot). A picture too tall for its box is then
+    squeezed vertically, which ``height_squeezed`` reports.
     """
     natural_w, natural_h = natural_size_mm(bbox)
-    if scale is None:
-        scale = min(box_width_mm / natural_w, box_height_mm / natural_h) if natural_w and natural_h else 1.0
-    width, height = natural_w * scale, natural_h * scale
+    squeezed = False
+    if mode == "width" and natural_w and natural_h:
+        width = box_width_mm
+        height = natural_h * (box_width_mm / natural_w)
+        if box_height_mm and height > box_height_mm:
+            height, squeezed = box_height_mm, True
+        scale = width / natural_w
+    else:
+        if scale is None:
+            scale = min(box_width_mm / natural_w, box_height_mm / natural_h) if natural_w and natural_h else 1.0
+        width, height = natural_w * scale, natural_h * scale
     return {
         "width_mm": round(width, 2),
         "height_mm": round(height, 2),
         "natural_width_mm": round(natural_w, 2),
         "natural_height_mm": round(natural_h, 2),
+        "mode": mode,
+        "height_squeezed": squeezed,
         "scale": round(scale, 3),
         "fill_ratio": round((width * height) / (box_width_mm * box_height_mm), 3) if box_width_mm and box_height_mm else None,
         "width_hwpunit": mm_to_hu(width),
@@ -587,10 +601,10 @@ def plan_picture_slots(regions: list[dict], slots: list[dict], watermark_pages: 
     for region, slot in zip(leftover, slots):
         wm = watermark_pages.get(region["page"], "no_watermark")
         blocked = wm == "review_required"
-        fit = fit_picture(region["bbox"], hu_to_mm(slot["width"]), hu_to_mm(slot["height"]))
+        fit = fit_picture(region["bbox"], hu_to_mm(slot["width"]), hu_to_mm(slot["height"]), mode="width")
         flags = ["slot_paired_by_order"] + (["watermark_manual_required"] if blocked else [])
-        if fit["fill_ratio"] is not None and fit["fill_ratio"] < SMALL_FILL_RATIO:
-            flags.append("picture_small_in_box")
+        if fit["height_squeezed"]:
+            flags.append("picture_height_squeezed")
         changes.append(
             {
                 "id": f"p{region['page']}-{region['index']}-slot-t{slot['table']}-{slot['row']}-{slot['col']}",

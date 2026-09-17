@@ -115,6 +115,10 @@ def confirm_sections(job: Path, argv_main, use_gemini: bool) -> bool:
             for scope in scopes:
                 source = f"  ← 성적서 '{scope['pdf_title']}'" if scope.get("pdf_title") else ""
                 print(f"  {scope['no']}. {scope['title']}{source}")
+            if tests and candidates["mode"] == "auto" and len(scopes) == len(tests) and all(s.get("method") == "code" for s in scopes):
+                # every test matched a section by its code: nothing to decide, so do not make the user wait here
+                print(f"  성적서 시험 {len(tests)}개가 모두 시험 코드로 짝지어져 그대로 진행합니다.")
+                return True
             if tests and candidates["mode"] == "auto" and len(scopes) < len(tests):
                 print(f"  성적서 시험 {len(tests)}개 중 {len(scopes)}개만 보고서 구역을 찾았습니다.")
             if _yes("이 구역들이 맞나요?", default=True):

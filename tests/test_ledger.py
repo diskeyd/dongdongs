@@ -148,3 +148,23 @@ def test_wizard_offers_to_continue_the_report(tmp_path, monkeypatch):
     monkeypatch.setattr("builtins.input", lambda prompt="": next(answers))
     assert wizard.choose_report(tmp_path / "work") == (None, None)
     assert wizard.choose_report(tmp_path / "empty") == (None, None)
+
+
+def _no_input(prompt=""):
+    raise AssertionError(f"the wizard should not ask here: {prompt}")
+
+
+def test_wizard_does_not_stop_when_every_test_matched_by_code(tmp_path, monkeypatch):
+    """Analysis takes minutes; a question nobody needs to answer keeps the PC waiting."""
+    from dongdongs import wizard
+
+    job = _job(tmp_path, "t1")
+    write_json(job.path("sections.json"), {"found": True, "sections": [{"title": "시험A (TDa)"}]})
+    _candidates(job, "auto", [{"key": "s2", "no": 2, "title": "시험2", "code": "TDa", "method": "code", "pdf_title": "시험A (TDa)"}])
+    monkeypatch.setattr("builtins.input", _no_input)
+    assert wizard.confirm_sections(job.root, lambda argv: 0, False) is True
+
+    # a test that only matched by name still gets a look from the reviewer
+    _candidates(job, "auto", [{"key": "s2", "no": 2, "title": "시험2", "code": None, "method": "name", "pdf_title": "시험A"}])
+    monkeypatch.setattr("builtins.input", lambda prompt="": "")
+    assert wizard.confirm_sections(job.root, lambda argv: 0, False) is True

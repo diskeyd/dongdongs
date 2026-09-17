@@ -359,6 +359,8 @@ def cmd_apply(args) -> int:
     if not chosen:
         raise SystemExit("검수 화면에서 승인한 항목이 없습니다. 승인한 뒤 [저장] 을 누르고 다시 실행하세요.")
     effective = [c for c in chosen if not c.get("no_op")]
+    if not effective:
+        raise SystemExit("승인한 항목이 모두 '변경 없음'이라 한글에 넣을 것이 없습니다. 검수 화면에서 값이 바뀌는 줄(회색이 아닌 줄)을 골라 승인한 뒤 다시 실행하세요.")
     print(f"승인 {len(chosen)}건 · 실제 변경 {len(effective)}건 · 대상 {job.hwp.name}")
     print("원본 HWP는 열지 않고 result/ 에 before·processed 사본을 만든 뒤 processed 사본에만 반영합니다.")
     if not args.yes and input("계속하시겠습니까? [y/N] ").strip().lower() != "y":
@@ -373,13 +375,16 @@ def cmd_apply(args) -> int:
     job.record_step("apply", counts=counts, saved=result.get("saved_changed_bytes"))
     print("반영 결과:", counts)
     failed = [c for c in result["changes"] if c["apply_status"] not in ("applied", "skipped_no_op")]
-    if not counts.get("applied"):
-        print("반영된 항목이 하나도 없습니다. 결과 파일은 원본과 같습니다.")
+    if not counts.get("applied") and not failed:
+        # everything approved turned out to hold the same value already
+        print("승인한 항목이 모두 이미 같은 값이라 바뀐 것이 없습니다.")
+    elif not counts.get("applied"):
+        print("반영된 항목이 하나도 없습니다.")
     if result.get("saved_changed_bytes") is False:
         print("한글이 결과 파일을 저장하지 못했습니다(원본과 내용이 같습니다).")
     if failed:
         print(f"들어가지 못한 항목 {len(failed)}건 · 첫 메시지: {failed[0].get('error') or failed[0]['apply_status']}")
-    if failed or not counts.get("applied") or result.get("saved_changed_bytes") is False:
+    if failed or result.get("saved_changed_bytes") is False:
         print("report.bat 을 실행해 zip 을 Issue 에 올려 주세요.")
         return 2
     print("다음: dongdongs verify --stage hwp --job", job.root)
@@ -446,6 +451,7 @@ def apply_summary(job: Job, result: dict, counts: dict) -> dict:
         "job_id": job.manifest()["job_id"],
         "counts": counts,
         "saved_changed_bytes": result.get("saved_changed_bytes"),
+        "security_module": result.get("security_module"),
         "page_count_before": result.get("page_count_before"),
         "page_count_after": result.get("page_count_after"),
         "copies": result.get("copies"),

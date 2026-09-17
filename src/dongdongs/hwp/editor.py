@@ -37,6 +37,25 @@ class EditorError(RuntimeError):
     pass
 
 
+def register_security_module(hwp) -> str:
+    """Let Hancom open files without asking for approval each time. Returns what happened."""
+    import importlib.util
+    import winreg
+
+    spec = importlib.util.find_spec("pyhwpx")
+    folder = Path(spec.origin).parent if spec and spec.origin else None
+    dll = next((p for p in (folder.glob("**/FilePathCheckerModule*.dll") if folder else [])), None)
+    if dll is None:
+        return "no-dll"
+    try:
+        key = winreg.CreateKey(winreg.HKEY_CURRENT_USER, r"SOFTWARE\HNC\HwpAutomation\Modules")
+        winreg.SetValueEx(key, "FilePathCheckerModule", 0, winreg.REG_SZ, str(dll))
+        key.Close()
+        return "ok" if hwp.RegisterModule("FilePathCheckDLL", "FilePathCheckerModule") else "refused"
+    except Exception as exc:  # noqa: BLE001 - Hancom may still work, with approval dialogs
+        return f"failed: {type(exc).__name__}"
+
+
 def _norm(text: str) -> str:
     return " ".join((text or "").replace("\r\n", "\n").split()).casefold()
 
@@ -59,10 +78,13 @@ class HwpEditor:
     def __init__(self, visible: bool = False) -> None:
         if sys.platform != "win32":
             raise EditorError("HWP editing needs Windows with Hancom Office (COM). Run 'apply' on the Windows PC.")
-        from pyhwpx import Hwp  # registers the bundled security module (FilePathCheckerModule) in HKCU
+        from pyhwpx import Hwp
 
-        self.api = Hwp(new=True, visible=visible, register_module=True)
+        # pyhwpx 1.7.2 can fail its own module registration ("cannot access local variable 'location'"),
+        # so it is done here: without it Hancom asks for approval on every file access
+        self.api = Hwp(new=True, visible=visible, register_module=False)
         self.hwp = self.api.hwp
+        self.security_module = register_security_module(self.hwp)
 
     # document -----------------------------------------------------------
     def open(self, path: Path) -> None:
@@ -391,6 +413,7 @@ def apply_changes(original: Path, result_dir: Path, approved: list[dict], visibl
         editor.close()
     return {
         "saved_changed_bytes": saved,
+        "security_module": getattr(editor, "security_module", None),
         "before_hwp": str(before),
         "processed_hwp": str(processed),
         "page_count_before": pages_before,

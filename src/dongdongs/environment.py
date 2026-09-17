@@ -35,50 +35,12 @@ def _scrub(path: str) -> str:
 
 
 def _hancom() -> dict:
-    """Detect Hancom Office through the registry.
+    """Hancom Office as seen from this process (see ``hancom.probe``)."""
+    from .hancom import probe
 
-    The registry locations below are the commonly documented ones and have not
-    been checked on the target Windows PC yet; ``com_available`` is the value
-    that matters for ``apply``.
-    """
-    info: dict = {"installed": False, "product_name": None, "version": None, "com_available": False}
+    info = probe()
     if sys.platform != "win32":
         info["note"] = "Hancom Office COM is Windows-only; not probed on this OS"
-        return info
-
-    import winreg
-
-    def open_key(root, sub):
-        try:
-            return winreg.OpenKey(root, sub)
-        except OSError:
-            return None
-
-    key = open_key(winreg.HKEY_CLASSES_ROOT, r"HWPFrame.HwpObject\CLSID")
-    if key is not None:
-        info["com_available"] = True
-        key.Close()
-
-    versions: set[str] = set()
-    for root in (winreg.HKEY_LOCAL_MACHINE, winreg.HKEY_CURRENT_USER):
-        for base in (r"SOFTWARE\HNC\Hwp", r"SOFTWARE\WOW6432Node\HNC\Hwp"):
-            key = open_key(root, base)
-            if key is None:
-                continue
-            index = 0
-            while True:
-                try:
-                    versions.add(winreg.EnumKey(key, index))
-                except OSError:
-                    break
-                index += 1
-            key.Close()
-    if versions:
-        info["installed"] = True
-        info["product_name"] = "Hancom Office Hwp"
-        info["version"] = sorted(versions)[-1]
-    if info["com_available"]:
-        info["installed"] = True
     return info
 
 

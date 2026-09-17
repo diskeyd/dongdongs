@@ -190,6 +190,15 @@ def run(argv_main) -> int:
     if argv_main(args):
         return 1
     job = str(work / job_id)
+    hancom = (read_json(Path(job) / "environment.json").get("hancom") or {}) if (Path(job) / "environment.json").is_file() else {}
+    ready = sys.platform == "win32" and bool(hancom.get("com_available"))
+    if not ready and sys.platform == "win32":
+        # found at init, not three hours later at the apply step
+        print(f"\n{hancom.get('verdict') or '이 PC 에서는 한글 반영이 안 됩니다.'}")
+        print("분석과 검수는 할 수 있지만, 한글 보고서에 넣는 단계는 이 PC 에서 되지 않습니다.")
+        if not _yes("분석·검수까지만 진행할까요?", default=True):
+            print("doctor.bat 을 실행해 나온 내용을 GitHub Issue 에 올려 주세요.")
+            return 1
     use_gemini = bool(os.environ.get("GEMINI_API_KEY"))
     print("\n분석을 시작합니다 (워터마크 삭제 → 검증 → 표·그래프 추출 → HWP 조사 → 후보). 몇 분 걸립니다.")
     analyze = ["analyze", "--job", job] + (["--use-gemini"] if use_gemini else [])
@@ -209,8 +218,8 @@ def run(argv_main) -> int:
         print("저장된 검수 결과가 없어 반영하지 않습니다. 다시 실행하면 같은 작업을 이어서 검수할 수 있습니다:")
         print(f"  uv run dongdongs review --job \"{job}\"")
         return 0
-    if sys.platform != "win32":
-        print("HWP 반영은 Windows 에서만 됩니다. 이 PC 에서는 검수 저장까지만 진행했습니다.")
+    if not ready:
+        print("한글 반영은 하지 않았습니다. 검수 저장까지만 끝냈습니다." if sys.platform == "win32" else "HWP 반영은 Windows 에서만 됩니다. 이 PC 에서는 검수 저장까지만 진행했습니다.")
         return 0
     if not _yes("\n승인한 항목을 HWP 사본에 반영할까요? (한글 창이 열립니다)"):
         print("반영을 건너뛰었습니다. 나중에: uv run dongdongs apply --job", f'"{job}"')

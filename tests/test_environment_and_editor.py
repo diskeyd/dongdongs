@@ -59,3 +59,34 @@ def test_apply_order_fills_a_sections_new_pages_before_its_anchor_page_is_retitl
     order = [c["id"] for c in sorted(changes, key=_apply_order)]
     assert order[:6] == ["s2-page", "s2-add1", "s2-anchor", "s3-add1", "s3-add2", "s3-anchor"]
     assert set(order[6:]) == {"cell", "circuit"}
+
+
+def test_hancom_probe_says_windows_only_here():
+    from dongdongs.hancom import probe
+
+    status = probe()
+    assert status["com_available"] is False and "Windows" in status["verdict"]
+    assert status["python_bits"] in (32, 64)
+
+
+def test_apply_summary_carries_no_document_text(tmp_path):
+    """It goes into the default report zip, so no cell text, no graph titles."""
+    import pymupdf
+
+    from dongdongs.cli import apply_summary
+    from dongdongs.job import create_job
+
+    pdf = tmp_path / "t.pdf"
+    doc = pymupdf.open()
+    doc.new_page()
+    doc.save(pdf)
+    job = create_job(tmp_path / "work", pdf, None, job_id="t1")
+    result = {
+        "saved_changed_bytes": False,
+        "changes": [{"id": "p11-graph-page", "kind": "fill_oscillogram_page", "section": {"no": 2}, "apply_status": "error",
+                     "error": "occurrence 1 of 'Osc. AB12C3456-001' not found", "before": "Osc. AB12C3456-001", "after": "Osc. ZZ-1"}],
+    }
+    summary = apply_summary(job, result, {"error": 1})
+    assert summary["changes"][0]["error"] == "occurrence 1 of '…' not found"
+    assert "Osc. AB12C3456-001" not in json.dumps(summary, ensure_ascii=False)
+    assert summary["saved_changed_bytes"] is False and summary["counts"] == {"error": 1}

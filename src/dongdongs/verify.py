@@ -129,6 +129,9 @@ def compare_hwp(before: dict, after: dict, applied: list[dict], copies: list[dic
     """
     problems: list[str] = []
     done = [c for c in applied if c.get("apply_status") == "applied"]
+    if not done:
+        # before and after are identical then, which used to read as "passed"
+        problems.append("no change was applied; the result file is the original")
     text_changes = {(c["hwp"]["table"], c["hwp"]["row"], c["hwp"]["col"]): c for c in done if c.get("kind", "set_cell_text") == "set_cell_text"}
     picture_changes = {(c["hwp"]["table"], c["hwp"]["row"], c["hwp"]["col"]): c for c in done if c.get("kind") == "replace_picture"}
     from .hwp.mapping import graph_page_positions

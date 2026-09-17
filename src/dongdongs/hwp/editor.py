@@ -311,6 +311,7 @@ def apply_changes(original: Path, result_dir: Path, approved: list[dict], visibl
     editor = HwpEditor(visible=visible)
     log: list[dict] = []
     pages_before = pages_after = None
+    saved = None
     added_pages: set[int] = set()
     copies: list[dict] = []
     try:
@@ -384,9 +385,12 @@ def apply_changes(original: Path, result_dir: Path, approved: list[dict], visibl
             log.append({**change, **entry})
         pages_after = editor.page_count()
         editor.save_as(processed)
+        # a saved file is never byte-identical to the copy; if it is, Hancom wrote nothing
+        saved = sha256_file(processed) != sha256_file(before)
     finally:
         editor.close()
     return {
+        "saved_changed_bytes": saved,
         "before_hwp": str(before),
         "processed_hwp": str(processed),
         "page_count_before": pages_before,

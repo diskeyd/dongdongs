@@ -99,3 +99,9 @@ def test_each_section_gets_its_copies_right_after_its_own_last_graph_page():
     # both copies at the end of the document: wrong sections
     wrong = _page_inventory(["Osc. A-1", "other 1", "Osc. C-1", "other 2", "Osc. B-1", "Osc. D-1"], [[], [(800, 300)], [], [(800, 300)], [(1000, 700)], [(1000, 700)]])
     assert not compare_hwp(before, wrong, plan, copies)["passed"]
+
+
+def test_a_run_that_applied_nothing_is_not_a_pass():
+    """The 2026-09-17 run never reached Hancom, yet before == after read as 'passed'."""
+    result = compare_hwp(_inv(), _inv(), [])
+    assert not result["passed"] and any("no change was applied" in p for p in result["structure_problems"])

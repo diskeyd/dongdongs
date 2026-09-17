@@ -173,6 +173,7 @@
     const status = document.getElementById("status");
     status.textContent = "저장 중…";
     try {
+      if (!Object.values(decisions).some((d) => d.decision === "approve") && !confirm("승인한 항목이 없습니다. 이대로 저장하면 한글에 아무것도 들어가지 않습니다. 저장할까요?")) return;
       const res = await fetch("/save", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ reviewer: document.getElementById("reviewer").value, decisions }) });
       if (!res.ok) throw new Error(res.status);
       const r = await res.json();

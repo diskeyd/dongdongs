@@ -10,6 +10,7 @@
     dongdongs analyze      --job DIR [--sections ...] (clean + extract + inspect-hwp + map)
     dongdongs review       --job DIR [--port 8765]
     dongdongs apply        --job DIR [--yes]    (Windows + Hancom Office only)
+    dongdongs doctor                            (can this PC drive 한글? no job needed)
     dongdongs report       [--job DIR] [--full] (error-report zip, no report data)
     dongdongs start                             (question-and-answer flow for run.bat)
 
@@ -19,6 +20,7 @@
 from __future__ import annotations
 
 import argparse
+import re
 import sys
 from pathlib import Path
 
@@ -344,11 +346,18 @@ def cmd_apply(args) -> int:
     job = _job(args)
     if job.hwp is None:
         raise SystemExit("이 작업에는 HWP가 지정되지 않았습니다.")
+    from .hancom import probe
+
+    status = probe()
+    if not status["com_available"]:
+        raise SystemExit(f"{status['verdict']} 반영을 시작하지 않았습니다. doctor.bat 을 실행해 그 내용을 Issue 에 올려 주세요.")
     approved_path = job.path("approved_changes.json")
     if not approved_path.is_file():
         raise SystemExit("approved_changes.json 이 없습니다. review 에서 승인 후 저장하세요.")
     approved = read_json(approved_path)["changes"]
     chosen = [c for c in approved if c.get("decision") == "approve" and c.get("status") != "blocked"]
+    if not chosen:
+        raise SystemExit("검수 화면에서 승인한 항목이 없습니다. 승인한 뒤 [저장] 을 누르고 다시 실행하세요.")
     effective = [c for c in chosen if not c.get("no_op")]
     print(f"승인 {len(chosen)}건 · 실제 변경 {len(effective)}건 · 대상 {job.hwp.name}")
     print("원본 HWP는 열지 않고 result/ 에 before·processed 사본을 만든 뒤 processed 사본에만 반영합니다.")
@@ -360,10 +369,67 @@ def cmd_apply(args) -> int:
     counts: dict[str, int] = {}
     for change in result["changes"]:
         counts[change["apply_status"]] = counts.get(change["apply_status"], 0) + 1
-    job.record_step("apply", counts=counts)
+    write_json(job.path("apply_summary.json"), apply_summary(job, result, counts))
+    job.record_step("apply", counts=counts, saved=result.get("saved_changed_bytes"))
     print("반영 결과:", counts)
+    failed = [c for c in result["changes"] if c["apply_status"] not in ("applied", "skipped_no_op")]
+    if not counts.get("applied"):
+        print("반영된 항목이 하나도 없습니다. 결과 파일은 원본과 같습니다.")
+    if result.get("saved_changed_bytes") is False:
+        print("한글이 결과 파일을 저장하지 못했습니다(원본과 내용이 같습니다).")
+    if failed:
+        print(f"들어가지 못한 항목 {len(failed)}건 · 첫 메시지: {failed[0].get('error') or failed[0]['apply_status']}")
+    if failed or not counts.get("applied") or result.get("saved_changed_bytes") is False:
+        print("report.bat 을 실행해 zip 을 Issue 에 올려 주세요.")
+        return 2
     print("다음: dongdongs verify --stage hwp --job", job.root)
     return 0
+
+
+def cmd_doctor(args) -> int:
+    """Print what this PC can and cannot do, with no report data in it, for pasting into an Issue."""
+    from .hancom import dispatch_test, probe, pyhwpx_test
+
+    status = probe()
+    print("=== dongdongs 한글 연결 진단 ===")
+    print(f"dongdongs {__version__} · Python {sys.version.split()[0]} ({status['python_bits']}비트) · {sys.platform}")
+    print(f"한글 설치: {'예' if status['installed'] else '아니오'}" + (f" ({status['product_name']} {status['version']})" if status["installed"] else ""))
+    print(f"COM 등록(64비트 자리): {'있음' if status['progid_64bit'] else '없음'} · (32비트 자리): {'있음' if status['progid_32bit'] else '없음'}")
+    if sys.platform == "win32":
+        loaded = pyhwpx_test()
+        print(f"pyhwpx 불러오기: {'성공' if loaded['ok'] else '실패 — ' + loaded['error']}")
+        if args.start_hancom:
+            result = dispatch_test()
+            print(f"한글 실행 시도: {'성공' if result.get('ok') else '안 함/실패 — ' + str(result.get('error') or result.get('reason'))}")
+        else:
+            print("한글 실행 시도: 안 함 (--start-hancom 을 붙이면 한글을 한 번 띄워 봅니다)")
+    print(f"판정: {status['verdict']}")
+    if not status["com_available"]:
+        print("이 PC 에서는 분석·검수까지만 됩니다. 위 내용을 그대로 복사해 GitHub Issue 에 올려 주세요.")
+    return 0
+
+
+def apply_summary(job: Job, result: dict, counts: dict) -> dict:
+    """Apply result without any report values, for the default error-report zip."""
+    return {
+        "job_id": job.manifest()["job_id"],
+        "counts": counts,
+        "saved_changed_bytes": result.get("saved_changed_bytes"),
+        "page_count_before": result.get("page_count_before"),
+        "page_count_after": result.get("page_count_after"),
+        "copies": result.get("copies"),
+        "changes": [
+            {
+                "id": change["id"],
+                "kind": change["kind"],
+                "section": (change.get("section") or {}).get("no"),
+                "apply_status": change["apply_status"],
+                # quoted parts hold document text (a graph title carries the test-report number)
+                "error": re.sub(r"'[^']*'", "'…'", change["error"]) if change.get("error") else None,
+            }
+            for change in result["changes"]
+        ],
+    }
 
 
 def cmd_report(args) -> int:
@@ -448,6 +514,10 @@ def build_parser() -> argparse.ArgumentParser:
     p = job_parser("apply", cmd_apply, "승인된 변경을 HWP 사본에 반영 (Windows 전용)")
     p.add_argument("--yes", action="store_true")
     p.add_argument("--visible", action="store_true", help="한글 창을 보이게 실행")
+
+    p = sub.add_parser("doctor", help="이 PC 가 한글 반영을 할 수 있는지 진단 (고객 자료 없음)")
+    p.add_argument("--start-hancom", action="store_true", help="한글을 실제로 한 번 띄워 본다")
+    p.set_defaults(func=cmd_doctor)
 
     p = sub.add_parser("report", help="오류 보고용 zip 생성 (PDF·HWP·값 제외)")
     p.add_argument("--job", help="작업 폴더 (기본: 가장 최근 작업)")

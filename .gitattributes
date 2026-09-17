@@ -1,0 +1,3 @@
+# Windows scripts: keep CRLF, never convert them.
+*.bat -text
+*.ps1 -text

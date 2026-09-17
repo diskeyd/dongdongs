@@ -142,11 +142,33 @@ def details() -> dict:
                 key.Close()
             base.Close()
 
+    def value_of(root, sub, view, name=""):
+        try:
+            key = winreg.OpenKey(root, sub, 0, winreg.KEY_READ | view)
+        except OSError:
+            return None
+        try:
+            found, _kind = winreg.QueryValueEx(key, name)
+            return found if isinstance(found, str) else None
+        except OSError:
+            return None
+        finally:
+            key.Close()
+
+    # how Windows itself opens a .hwp file: the surest pointer to the installed product
+    opens_hwp = {}
+    for label, view in (("64", winreg.KEY_WOW64_64KEY), ("32", winreg.KEY_WOW64_32KEY)):
+        progid = value_of(winreg.HKEY_CLASSES_ROOT, ".hwp", view)
+        command = value_of(winreg.HKEY_CLASSES_ROOT, rf"{progid}\shell\open\command", view) if progid else None
+        app_path = value_of(winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\Hwp.exe", view)
+        if progid or command or app_path:
+            opens_hwp[label] = {"progid": progid, "command": command, "app_path": app_path}
+
     executables = []
     for folder in filter(None, (os.environ.get("ProgramFiles"), os.environ.get("ProgramFiles(x86)"), os.environ.get("LOCALAPPDATA"))):
         for pattern in ("Hnc/*/*/Bin/*.exe", "Hnc/*/*/*.exe", "Hnc/*/*.exe"):
             executables += [p for p in glob.glob(os.path.join(folder, pattern)) if Path(p).name.lower().startswith(("hwp", "hoffice"))]
-    return {"progids": progids, "install_values": install, "executables": sorted(set(executables))[:12]}
+    return {"progids": progids, "install_values": install, "executables": sorted(set(executables))[:12], "opens_hwp": opens_hwp}
 
 
 def dispatch_test() -> dict:

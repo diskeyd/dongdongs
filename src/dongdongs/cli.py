@@ -402,6 +402,8 @@ def cmd_doctor(args) -> int:
             print(f"  설치 정보 {key} = {value}")
         for exe in found["executables"]:
             print(f"  실행 파일 {exe}")
+        for label, entry in found.get("opens_hwp", {}).items():
+            print(f"  .hwp 연결({label}비트): {entry.get('progid')} · {entry.get('command') or entry.get('app_path')}")
         loaded = pyhwpx_test()
         print(f"pyhwpx 불러오기: {'성공' if loaded['ok'] else '실패 — ' + loaded['error']}")
         if args.start_hancom:

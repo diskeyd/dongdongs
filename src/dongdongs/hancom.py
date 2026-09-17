@@ -12,8 +12,11 @@ from __future__ import annotations
 
 import struct
 import sys
+from pathlib import Path
 
 PROGID = "HWPFrame.HwpObject"
+# other names Hancom has used for the same automation object
+PROGID_ALIASES = (PROGID, "HWPFrame.HwpObject.1", "HwpCtrl.Object", "HWPFrame.HwpCtrl", "Hwp.Application")
 
 
 def python_bits() -> int:
@@ -92,6 +95,60 @@ def probe() -> dict:
     return info
 
 
+def details() -> dict:
+    """Everything ``doctor`` needs to tell a viewer-only install from an unregistered one."""
+    if sys.platform != "win32":
+        return {"progids": {}, "install_values": {}, "executables": []}
+    import glob
+    import os
+    import winreg
+
+    progids: dict[str, str] = {}
+    for name in PROGID_ALIASES:
+        views = []
+        for label, view in (("64", winreg.KEY_WOW64_64KEY), ("32", winreg.KEY_WOW64_32KEY)):
+            try:
+                winreg.OpenKey(winreg.HKEY_CLASSES_ROOT, rf"{name}\CLSID", 0, winreg.KEY_READ | view).Close()
+                views.append(label)
+            except OSError:
+                pass
+        progids[name] = "+".join(views) if views else "없음"
+
+    install: dict[str, str] = {}
+    for root, root_name in ((winreg.HKEY_LOCAL_MACHINE, "HKLM"), (winreg.HKEY_CURRENT_USER, "HKCU")):
+        for view in (winreg.KEY_WOW64_64KEY, winreg.KEY_WOW64_32KEY):
+            try:
+                base = winreg.OpenKey(root, r"SOFTWARE\HNC\Hwp", 0, winreg.KEY_READ | view)
+            except OSError:
+                continue
+            index = 0
+            while True:
+                try:
+                    version = winreg.EnumKey(base, index)
+                except OSError:
+                    break
+                index += 1
+                try:
+                    key = winreg.OpenKey(base, version, 0, winreg.KEY_READ | view)
+                except OSError:
+                    continue
+                for value_index in range(winreg.QueryInfoKey(key)[1]):
+                    try:
+                        name, value, _kind = winreg.EnumValue(key, value_index)
+                    except OSError:
+                        break
+                    if isinstance(value, str) and value:
+                        install[f"{root_name}\\HNC\\Hwp\\{version}\\{name or '(기본값)'}"] = value
+                key.Close()
+            base.Close()
+
+    executables = []
+    for folder in filter(None, (os.environ.get("ProgramFiles"), os.environ.get("ProgramFiles(x86)"), os.environ.get("LOCALAPPDATA"))):
+        for pattern in ("Hnc/*/*/Bin/*.exe", "Hnc/*/*/*.exe", "Hnc/*/*.exe"):
+            executables += [p for p in glob.glob(os.path.join(folder, pattern)) if Path(p).name.lower().startswith(("hwp", "hoffice"))]
+    return {"progids": progids, "install_values": install, "executables": sorted(set(executables))[:12]}
+
+
 def dispatch_test() -> dict:
     """Actually start 한글 through COM and close it again. Only ``doctor`` calls this."""
     if sys.platform != "win32":
@@ -120,4 +177,4 @@ def pyhwpx_test() -> dict:
     return {"ok": True}
 
 
-__all__ = ["PROGID", "dispatch_test", "probe", "pyhwpx_test", "python_bits"]
+__all__ = ["PROGID", "PROGID_ALIASES", "details", "dispatch_test", "probe", "pyhwpx_test", "python_bits"]

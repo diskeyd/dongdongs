@@ -388,7 +388,7 @@ def cmd_apply(args) -> int:
 
 def cmd_doctor(args) -> int:
     """Print what this PC can and cannot do, with no report data in it, for pasting into an Issue."""
-    from .hancom import dispatch_test, probe, pyhwpx_test
+    from .hancom import details, dispatch_test, probe, pyhwpx_test
 
     status = probe()
     print("=== dongdongs 한글 연결 진단 ===")
@@ -396,6 +396,12 @@ def cmd_doctor(args) -> int:
     print(f"한글 설치: {'예' if status['installed'] else '아니오'}" + (f" ({status['product_name']} {status['version']})" if status["installed"] else ""))
     print(f"COM 등록(64비트 자리): {'있음' if status['progid_64bit'] else '없음'} · (32비트 자리): {'있음' if status['progid_32bit'] else '없음'}")
     if sys.platform == "win32":
+        found = details()
+        print("자동화 이름 등록: " + " · ".join(f"{name}={where}" for name, where in found["progids"].items()))
+        for key, value in list(found["install_values"].items())[:12]:
+            print(f"  설치 정보 {key} = {value}")
+        for exe in found["executables"]:
+            print(f"  실행 파일 {exe}")
         loaded = pyhwpx_test()
         print(f"pyhwpx 불러오기: {'성공' if loaded['ok'] else '실패 — ' + loaded['error']}")
         if args.start_hancom:
@@ -404,6 +410,12 @@ def cmd_doctor(args) -> int:
         else:
             print("한글 실행 시도: 안 함 (--start-hancom 을 붙이면 한글을 한 번 띄워 봅니다)")
     print(f"판정: {status['verdict']}")
+    if sys.platform == "win32" and not status["com_available"] and found["executables"]:
+        print("해 볼 것: 한글을 한 번 직접 실행해 보고, 그래도 같으면 관리자 권한 명령 프롬프트에서 아래를 실행한 뒤 다시 진단하세요.")
+        for exe in found["executables"]:
+            if Path(exe).name.lower().startswith("hwp"):
+                print(f'  "{exe}" /regserver')
+                break
     if not status["com_available"]:
         print("이 PC 에서는 분석·검수까지만 됩니다. 위 내용을 그대로 복사해 GitHub Issue 에 올려 주세요.")
     return 0

@@ -29,7 +29,8 @@
   input.after { width:100%; min-width:120px; font:inherit; padding:3px 5px; }
   .flag { display:inline-block; font-size:11px; padding:1px 6px; margin:1px; border-radius:10px; background:#eef1f8; color:#334; }
   .flag.warn { background:#fff1dd; color:var(--warn); } .flag.bad { background:#fde8e6; color:var(--bad); }
-  tr.noop td { color:var(--muted); }
+  tr.noop td { color:var(--muted); background:#f4f4f6; }
+  body.only-changed tr.noop { display:none; }
   tr.changed td.after-cell { background:#fffbe6; }
   .bar { position:fixed; left:0; right:0; bottom:0; background:var(--card); border-top:1px solid var(--line); padding:10px 24px; display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
   button { font:inherit; padding:6px 14px; border-radius:6px; border:1px solid var(--line); background:#fff; cursor:pointer; }
@@ -125,6 +126,7 @@
       </td>
       <td>
         {% for f in c.flags %}<span class="flag {{ 'bad' if 'watermark' in f or 'not_implemented' in f else 'warn' }}">{{ f }}</span>{% endfor %}
+        {% if c.no_op %}<span class="flag">변경 없음</span>{% endif %}
         {% if c.status == "blocked" %}<span class="flag bad">blocked</span>{% endif %}
       </td>
       <td>
@@ -154,6 +156,7 @@
 
 <div class="bar">
   <label>검수자 <input id="reviewer" size="10"></label>
+  <label><input type="checkbox" id="only-changed"> 값이 바뀌는 줄만 보기</label>
   <button id="approve-noop">변경 없음 항목 모두 승인</button>
   <button class="primary" id="save">저장</button>
   <span id="status"></span>
@@ -161,6 +164,9 @@
 
 <script>
   const rows = () => Array.from(document.querySelectorAll("tr[data-id]"));
+  document.getElementById("only-changed").addEventListener("change", (e) => {
+    document.body.classList.toggle("only-changed", e.target.checked);
+  });
   document.getElementById("approve-noop").addEventListener("click", () => {
     rows().filter(r => r.classList.contains("noop")).forEach(r => { const s = r.querySelector("select.decision"); if (!s.disabled) s.value = "approve"; });
   });

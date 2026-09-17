@@ -233,7 +233,10 @@ def run(argv_main) -> int:
     if not _yes("\n승인한 항목을 HWP 사본에 반영할까요? (한글 창이 열립니다)"):
         print("반영을 건너뛰었습니다. 나중에: uv run dongdongs apply --job", f'"{job}"')
         return 0
-    if argv_main(["apply", "--job", job, "--yes", "--visible"]):
+    print("한글 창은 띄우지 않고 진행합니다. 이 창을 최소화하고 다른 일을 하셔도 됩니다.")
+    print("다만 반영이 끝날 때까지 한글로 다른 문서를 편집하지 마세요. (한글 창을 보려면 dongdongs.env 에 HWP_VISIBLE=1)")
+    show_hancom = os.environ.get("HWP_VISIBLE", "").strip() in ("1", "true", "True")
+    if argv_main(["apply", "--job", job, "--yes"] + (["--visible"] if show_hancom else [])):
         return 1
     if argv_main(["verify", "--job", job, "--stage", "hwp"]):
         print("\nHWP 검증을 통과하지 못했습니다. 이 결과 파일로 이어서 넣지 말고 report.bat 으로 보고서를 만들어 보내 주세요.")

@@ -42,3 +42,7 @@ Write-Host ''
 Write-Host '설치가 끝났습니다.'
 Write-Host ' - Gemini 키가 있으면 dongdongs.env 파일을 메모장으로 열어 GEMINI_API_KEY= 뒤에 붙여 넣으세요. (선택)'
 Write-Host ' - 실행은 run.bat 을 더블클릭하세요.'
+
+Write-Host ''
+Write-Host '한글 연결 상태를 확인합니다...'
+& $uv run dongdongs doctor

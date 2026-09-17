@@ -388,7 +388,7 @@ def cmd_apply(args) -> int:
 
 def cmd_doctor(args) -> int:
     """Print what this PC can and cannot do, with no report data in it, for pasting into an Issue."""
-    from .hancom import details, dispatch_test, probe, pyhwpx_test
+    from .hancom import details, dispatch_test, hwp_executable, probe, pyhwpx_test, register
 
     status = probe()
     print("=== dongdongs 한글 연결 진단 ===")
@@ -412,15 +412,32 @@ def cmd_doctor(args) -> int:
         else:
             print("한글 실행 시도: 안 함 (--start-hancom 을 붙이면 한글을 한 번 띄워 봅니다)")
     print(f"판정: {status['verdict']}")
-    if sys.platform == "win32" and not status["com_available"] and found["executables"]:
-        print("해 볼 것: 한글을 한 번 직접 실행해 보고, 그래도 같으면 관리자 권한 명령 프롬프트에서 아래를 실행한 뒤 다시 진단하세요.")
-        for exe in found["executables"]:
-            if Path(exe).name.lower().startswith("hwp"):
-                print(f'  "{exe}" /regserver')
-                break
+    if sys.platform == "win32" and not status["com_available"]:
+        exe = hwp_executable()
+        if exe is None:
+            print("한글 실행 파일(Hwp.exe)을 찾지 못했습니다. 한글이 설치된 PC 에서 실행하세요.")
+        else:
+            print(f'고치는 방법: 한글 자동화 등록 — "{exe}" /regserver')
+            if args.register or _yes_no("지금 등록할까요? 관리자 권한 창이 한 번 뜹니다"):
+                result = register(exe)
+                if result["ok"]:
+                    status = probe()
+                    print(f"등록 후 판정: {status['verdict']}")
+                    if status["com_available"]:
+                        print("이제 run.bat 으로 진행하실 수 있습니다.")
+                else:
+                    print(f"등록하지 못했습니다: {result['error']}")
+                    print("시작 메뉴에서 명령 프롬프트를 관리자 권한으로 열고 위 줄을 직접 실행해 보세요.")
     if not status["com_available"]:
         print("이 PC 에서는 분석·검수까지만 됩니다. 위 내용을 그대로 복사해 GitHub Issue 에 올려 주세요.")
     return 0
+
+
+def _yes_no(prompt: str) -> bool:
+    try:
+        return input(f"{prompt} [y/N] ").strip().lower() == "y"
+    except EOFError:  # no console to ask in
+        return False
 
 
 def apply_summary(job: Job, result: dict, counts: dict) -> dict:
@@ -531,6 +548,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = sub.add_parser("doctor", help="이 PC 가 한글 반영을 할 수 있는지 진단 (고객 자료 없음)")
     p.add_argument("--start-hancom", action="store_true", help="한글을 실제로 한 번 띄워 본다")
+    p.add_argument("--register", action="store_true", help="묻지 않고 한글 자동화를 등록한다 (관리자 권한 창)")
     p.set_defaults(func=cmd_doctor)
 
     p = sub.add_parser("report", help="오류 보고용 zip 생성 (PDF·HWP·값 제외)")

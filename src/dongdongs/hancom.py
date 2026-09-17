@@ -171,6 +171,31 @@ def details() -> dict:
     return {"progids": progids, "install_values": install, "executables": sorted(set(executables))[:12], "opens_hwp": opens_hwp}
 
 
+def hwp_executable() -> str | None:
+    """Path of 한글 itself (Hwp.exe), the program that registers the automation object."""
+    for path in details()["executables"]:
+        if Path(path).name.lower() == "hwp.exe":
+            return path
+    return None
+
+
+def register(exe: str) -> dict:
+    """Run ``Hwp.exe /regserver`` as administrator (a UAC prompt appears).
+
+    Hancom's own switch: it only writes the automation entries the installer
+    should have written. Nothing else on the PC is touched.
+    """
+    if sys.platform != "win32":
+        return {"ok": False, "error": "Windows 전용"}
+    import subprocess
+
+    command = f"Start-Process -FilePath '{exe}' -ArgumentList '/regserver' -Verb RunAs -Wait"
+    done = subprocess.run(["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", command], capture_output=True, text=True)
+    if done.returncode != 0:
+        return {"ok": False, "error": (done.stderr or done.stdout or "").strip()[:300] or f"exit {done.returncode}"}
+    return {"ok": True}
+
+
 def dispatch_test() -> dict:
     """Actually start 한글 through COM and close it again. Only ``doctor`` calls this."""
     if sys.platform != "win32":
@@ -199,4 +224,4 @@ def pyhwpx_test() -> dict:
     return {"ok": True}
 
 
-__all__ = ["PROGID", "PROGID_ALIASES", "details", "dispatch_test", "probe", "pyhwpx_test", "python_bits"]
+__all__ = ["PROGID", "PROGID_ALIASES", "details", "dispatch_test", "hwp_executable", "probe", "pyhwpx_test", "python_bits", "register"]

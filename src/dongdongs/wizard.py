@@ -196,7 +196,16 @@ def run(argv_main) -> int:
         # found at init, not three hours later at the apply step
         print(f"\n{hancom.get('verdict') or '이 PC 에서는 한글 반영이 안 됩니다.'}")
         print("분석과 검수는 할 수 있지만, 한글 보고서에 넣는 단계는 이 PC 에서 되지 않습니다.")
-        if not _yes("분석·검수까지만 진행할까요?", default=True):
+        from .hancom import hwp_executable, probe, register
+
+        exe = hwp_executable()
+        if exe is not None and _yes("한글 자동화를 지금 등록할까요? (관리자 권한 창이 한 번 뜹니다)", default=True):
+            if register(exe)["ok"] and probe()["com_available"]:
+                print("등록했습니다. 반영까지 진행합니다.")
+                ready = True
+            else:
+                print("등록하지 못했습니다. doctor.bat 을 실행해 나온 내용을 GitHub Issue 에 올려 주세요.")
+        if not ready and not _yes("분석·검수까지만 진행할까요?", default=True):
             print("doctor.bat 을 실행해 나온 내용을 GitHub Issue 에 올려 주세요.")
             return 1
     use_gemini = bool(os.environ.get("GEMINI_API_KEY"))

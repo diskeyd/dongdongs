@@ -90,3 +90,10 @@ def test_apply_summary_carries_no_document_text(tmp_path):
     assert summary["changes"][0]["error"] == "occurrence 1 of '…' not found"
     assert "Osc. AB12C3456-001" not in json.dumps(summary, ensure_ascii=False)
     assert summary["saved_changed_bytes"] is False and summary["counts"] == {"error": 1}
+
+
+def test_hancom_registration_helpers_do_nothing_off_windows():
+    from dongdongs.hancom import hwp_executable, register
+
+    assert hwp_executable() is None
+    assert register("Hwp.exe") == {"ok": False, "error": "Windows 전용"}

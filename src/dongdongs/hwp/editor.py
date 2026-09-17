@@ -30,6 +30,8 @@ from ..job import report_stem, sha256_file
 from .mapping import anchor_page_of, cell_address, hu_to_mm
 
 _ADDRESS = re.compile(r"\b([A-Z]{1,3})(\d{1,4})\b")
+# what a rewritten line must keep looking like (2026-09-17: graph page titles lost their bold)
+CHAR_SHAPE_KEYS = ("Bold", "Italic", "UnderlineType", "UnderlineShape", "UnderlineColor", "Height", "TextColor", "FaceNameHangul", "FaceNameLatin", "FaceNameHanja", "Ratio", "Spacing", "SizeRatio", "Offset", "Emboss", "Engrave", "Outline", "Shadow", "StrikeOut")
 SIZE_TOLERANCE = 0.01  # 1 % of the planned size
 
 
@@ -156,6 +158,38 @@ class HwpEditor:
                 raise EditorError(f"stuck at {current} while moving to {address} (merged cells?)")
         raise EditorError(f"could not reach {address} in {max_steps} moves")
 
+    # character shape ----------------------------------------------------
+    def char_shape(self) -> dict:
+        """Character shape at the caret or selection; empty when Hancom will not say."""
+        try:
+            pset = self.hwp.HParameterSet.HCharShape
+            self.hwp.HAction.GetDefault("CharShape", pset.HSet)
+            shape = {}
+            for key in CHAR_SHAPE_KEYS:
+                try:
+                    shape[key] = getattr(pset, key)
+                except Exception:  # noqa: BLE001 - the set differs between Hancom versions
+                    continue
+            return shape
+        except Exception:  # noqa: BLE001 - never let the look stop the edit
+            return {}
+
+    def set_char_shape(self, shape: dict) -> bool:
+        """Put a saved character shape back on the current selection."""
+        if not shape:
+            return False
+        try:
+            pset = self.hwp.HParameterSet.HCharShape
+            self.hwp.HAction.GetDefault("CharShape", pset.HSet)
+            for key, value in shape.items():
+                try:
+                    setattr(pset, key, value)
+                except Exception:  # noqa: BLE001
+                    continue
+            return bool(self.hwp.HAction.Execute("CharShape", pset.HSet))
+        except Exception:  # noqa: BLE001
+            return False
+
     # cell text ----------------------------------------------------------
     def _select_cell_content(self) -> None:
         self._run("Cancel")
@@ -176,11 +210,15 @@ class HwpEditor:
         action.Execute(pset)
 
     def set_cell_text(self, text: str) -> None:
+        shape = {}
         if self.cell_text():
             self._select_cell_content()
+            shape = self.char_shape()  # the new text must look like the old one
             self._run("Delete")
         if text:
             self.insert_text(text)
+            self._select_cell_content()
+            self.set_char_shape(shape)
         self._run("Cancel")
 
     # pictures -----------------------------------------------------------
@@ -275,9 +313,20 @@ class HwpEditor:
             raise EditorError(f"graph page title {title_before!r} not found in the cell")
         for ctrl in self.pictures_in_cell():
             self.delete_ctrl(ctrl)
+        # read the look of the title line itself (the blank line above it has a different one)
+        self._run("Cancel")
+        self._run("MoveListBegin")
+        if title_before:
+            self.find_forward(title_before)  # the match is selected, so its look is what gets read
+        shape = self.char_shape()
+        self._run("Cancel")
         self._select_cell_content()
         self._run("Delete")
         self.insert_text("\n" + title_after + "\n")
+        self._select_cell_content()
+        kept_shape = self.set_char_shape(shape)
+        self._run("Cancel")
+        self._run("MoveListEnd")
         rows: list[list[dict]] = []
         for pic in pictures:
             if pic["layout"] == "half-right" and rows and rows[-1][0]["layout"] == "half-left" and len(rows[-1]) == 1:
@@ -294,7 +343,7 @@ class HwpEditor:
         found = self.pictures_in_cell()
         if len(found) != len(pictures):
             raise EditorError(f"{len(found)} pictures in the graph page after filling, planned {len(pictures)}")
-        return {"title": title_after, "pictures": len(found)}
+        return {"title": title_after, "pictures": len(found), "kept_char_shape": kept_shape}
 
 
 def prepare_result_copies(original: Path, result_dir: Path) -> tuple[Path, Path]:

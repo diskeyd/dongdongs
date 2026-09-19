@@ -157,7 +157,7 @@ def test_fit_picture_keeps_the_pdf_aspect_ratio():
 
 def _graph_regions(page, layouts):
     boxes = {"full": [86, 106, 566, 433], "half-left": [86, 435, 324, 762], "half-right": [327, 435, 566, 762]}
-    return [{"page": page, "index": i, "kind": "oscillogram", "layout": l, "bbox": boxes[l], "title": f"Osc. X-{page:03d}" if i == 0 else None, "png": f"images/p{page:03d}-{i}.png", "export": True} for i, l in enumerate(layouts)]
+    return [{"page": page, "index": i, "kind": "oscillogram", "layout": layout, "bbox": boxes[layout], "title": f"Osc. X-{page:03d}" if i == 0 else None, "png": f"images/p{page:03d}-{i}.png", "export": True} for i, layout in enumerate(layouts)]
 
 
 def _graph_page_inventory(titles):

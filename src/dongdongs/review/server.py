@@ -15,7 +15,6 @@ import webbrowser
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from importlib import resources
-from pathlib import Path
 
 from jinja2 import Environment, select_autoescape
 

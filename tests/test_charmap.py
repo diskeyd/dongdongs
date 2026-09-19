@@ -33,7 +33,10 @@ def test_private_glyphs_are_dropped_and_reported():
 
 def test_every_applied_pair_keeps_meaning():
     data = load_charmap()
-    norm = lambda s: unicodedata.normalize("NFKC", s).replace("μ", "µ")
+
+    def norm(s):
+        return unicodedata.normalize("NFKC", s).replace("μ", "µ")
+
     for pair in data["pairs"]:
         if pair["tier"] in ("measured", "standard"):
             assert norm(pair["pdf"]) == norm(pair["hwp"]), pair

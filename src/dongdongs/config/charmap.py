@@ -15,7 +15,6 @@ removed and reported.
 from __future__ import annotations
 
 import json
-import unicodedata
 from functools import lru_cache
 from importlib import resources
 
@@ -69,8 +68,4 @@ def to_hwp_text(text: str) -> tuple[str, list[str]]:
     return "".join(out), list(seen)
 
 
-def nfkc_equal(a: str, b: str) -> bool:
-    return unicodedata.normalize("NFKC", a) == unicodedata.normalize("NFKC", b)
-
-
-__all__ = ["APPLY_TIERS", "load_charmap", "nfkc_equal", "to_hwp_text"]
+__all__ = ["APPLY_TIERS", "load_charmap", "to_hwp_text"]

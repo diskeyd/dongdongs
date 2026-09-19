@@ -8,8 +8,6 @@ from pathlib import Path
 import pymupdf
 import yaml
 
-from .charmap import load_charmap, to_hwp_text
-
 
 def load_config(path: Path | None = None) -> dict:
     if path is not None:
@@ -59,4 +57,4 @@ def detect_institution(pdf_path: Path, config: dict) -> str | None:
     return None
 
 
-__all__ = ["detect_institution", "institution", "load_charmap", "load_config", "report_rules", "to_hwp_text", "with_defaults"]
+__all__ = ["detect_institution", "institution", "load_config", "report_rules", "with_defaults"]

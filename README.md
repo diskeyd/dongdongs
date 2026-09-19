@@ -45,7 +45,7 @@
 ## 2단계. 프로그램 내려받기
 
 1. 이 저장소 페이지에서 초록색 **`<> Code`** 버튼 → **`Download ZIP`**.
-2. 내려받은 zip을 **`C:\dongdongs`** 처럼 짧은 경로에 풀어 놓습니다. 풀고 나면 그 폴더 안에 `install.bat`, `run.bat`, `report.bat` 세 파일이 보여야 합니다.
+2. 내려받은 zip을 **`C:\dongdongs`** 처럼 짧은 경로에 풀어 놓습니다. 풀고 나면 그 폴더 안에 `install.bat`, `doctor.bat`, `run.bat`, `report.bat` 네 파일이 보여야 합니다.
 
 📺 GitHub가 처음이라면: [깃허브 모르면 바이브코딩 못합니다 | 비개발자를 위한 깃허브 설명](https://www.youtube.com/watch?v=-vBtNVK49ls) — 비캠프
 📄 글로 보기: [GitHub 문서 – 소스 코드 아카이브 다운로드](https://docs.github.com/ko/repositories/working-with-files/using-files/downloading-source-code-archives)
@@ -189,7 +189,7 @@ GEMINI_API_KEY=여기에_키_붙여넣기
 
 ## 처음 쓸 때 — 순서와 보내 줄 것
 
-이 프로그램의 한글 반영 부분은 아직 Windows에서 한 번도 돌려 보지 않았습니다. 그래서 **처음에는 한 번에 다 승인하지 말고, 아래 순서로 한 가지씩** 해 보고 결과를 보내 주세요. 고치는 것은 개발자가 합니다. 여러분은 **보내기만** 하면 됩니다.
+한글에 값을 넣는 부분은 2026-09-17에 Windows PC에서 아래 1~3회차(표 칸·회로도·그래프 쪽)까지 확인했고, 4회차부터는 아직 확인하지 못했습니다. 그래서 **처음에는 한 번에 다 승인하지 말고, 아래 순서로 한 가지씩** 해 보고 결과를 보내 주세요. 고치는 것은 개발자가 합니다. 여러분은 **보내기만** 하면 됩니다.
 
 ### 순서 (한 번에 하나씩)
 

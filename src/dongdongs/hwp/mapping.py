@@ -16,6 +16,7 @@ import re
 import unicodedata
 
 from ..config.charmap import to_hwp_text
+from ..pdf.sections import squash
 from .inspector import occurrence_of, oscillogram_pages, picture_slots, tables_with_cell
 
 
@@ -29,10 +30,6 @@ def norm(text: str) -> str:
 def key(text: str) -> str:
     """Matching key: Unicode-compatible, case-folded, all whitespace removed."""
     return re.sub(r"\s+", "", unicodedata.normalize("NFKC", text or "")).casefold()
-
-
-def _squash(text: str) -> str:
-    return re.sub(r"\s+", "", text or "")
 
 
 def col_letters(col: int) -> str:
@@ -177,9 +174,9 @@ def pair_pages(pdf_tables: list[dict], hwp_tables: list[dict], sections: list[st
 def _difference_flags(before: str, after: str) -> list[str]:
     if before.strip() == after.strip():
         return []
-    if _squash(before) == _squash(after):
+    if squash(before) == squash(after):
         return ["whitespace_only_difference"]
-    if _squash(unicodedata.normalize("NFKC", before)) == _squash(unicodedata.normalize("NFKC", after)):
+    if squash(unicodedata.normalize("NFKC", before)) == squash(unicodedata.normalize("NFKC", after)):
         return ["unicode_lookalike_only"]
     if key(before) == key(after):
         return ["case_or_spacing_only"]
@@ -273,7 +270,7 @@ def section_changes(pdf_table: dict, hwp_table: dict, block: dict, inventory: di
                 ("value", target["value"], pdf_row["value"], None, cells[2]["bbox"], []),
             ]
         else:
-            same = _squash(target["label_text"]) == _squash(pdf_row["label"]) and _squash(target["unit_text"]) == _squash(pdf_row["unit"])
+            same = squash(target["label_text"]) == squash(pdf_row["label"]) and squash(target["unit_text"]) == squash(pdf_row["unit"])
             if same:
                 combined, extra = target["label"]["text"], []
             else:
@@ -366,6 +363,13 @@ def hu_to_mm(value: float) -> float:
 
 def mm_to_hu(value: float) -> int:
     return int(round(value * HWPUNIT_PER_MM))
+
+
+SIZE_TOLERANCE = 0.01  # 1 % of the planned size
+
+
+def size_matches(expected: tuple[int, int], found: tuple[int, int], tolerance: float = SIZE_TOLERANCE) -> bool:
+    return all(abs(e - f) <= max(1, e * tolerance) for e, f in zip(expected, found))
 
 
 PT_PER_MM = 72 / 25.4

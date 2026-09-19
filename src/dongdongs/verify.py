@@ -116,10 +116,6 @@ def _norm(text: str) -> str:
     return "\n".join(line.strip() for line in text.replace("\r\n", "\n").split("\n")).strip()
 
 
-def _size_ok(expected, found, tolerance: float = 0.01) -> bool:
-    return all(abs(e - f) <= max(1, e * tolerance) for e, f in zip(expected, found))
-
-
 def compare_hwp(before: dict, after: dict, applied: list[dict], copies: list[dict] | None = None) -> dict:
     """Structure must be unchanged except for what the applied changes explain.
 
@@ -134,7 +130,7 @@ def compare_hwp(before: dict, after: dict, applied: list[dict], copies: list[dic
         problems.append("no change was applied; the result file is the original")
     text_changes = {(c["hwp"]["table"], c["hwp"]["row"], c["hwp"]["col"]): c for c in done if c.get("kind", "set_cell_text") == "set_cell_text"}
     picture_changes = {(c["hwp"]["table"], c["hwp"]["row"], c["hwp"]["col"]): c for c in done if c.get("kind") == "replace_picture"}
-    from .hwp.mapping import graph_page_positions
+    from .hwp.mapping import graph_page_positions, size_matches
 
     fills = [c for c in done if c.get("kind") == "fill_oscillogram_page"]
     counts_given = {int(c["anchor_page"]): int(c["count"]) for c in copies} if copies is not None else None
@@ -212,7 +208,7 @@ def compare_hwp(before: dict, after: dict, applied: list[dict], copies: list[dic
         found = pics_b.get((after_index_of.get(table_index, table_index),) + key[1:], [])
         if key in picture_changes:
             target = picture_changes[key]["target"]
-            if len(found) != 1 or not _size_ok((target["width_hwpunit"], target["height_hwpunit"]), (found[0]["width"], found[0]["height"])):
+            if len(found) != 1 or not size_matches((target["width_hwpunit"], target["height_hwpunit"]), (found[0]["width"], found[0]["height"])):
                 picture_problems.append({"cell": key, "expected": [target["width_hwpunit"], target["height_hwpunit"]], "found": [[p["width"], p["height"]] for p in found]})
             elif found[0]["bindata_id"] == group[0]["bindata_id"]:
                 picture_problems.append({"cell": key, "problem": "picture data unchanged after replacement"})
@@ -224,7 +220,7 @@ def compare_hwp(before: dict, after: dict, applied: list[dict], copies: list[dic
         frame_index = after_index_of.get(change["hwp"]["table"])
         found = pics_b.get((frame_index, change["hwp"]["row"], change["hwp"]["col"]), []) if frame_index is not None else []
         planned = [(p["width_hwpunit"], p["height_hwpunit"]) for p in change["pictures"]]
-        if len(found) != len(planned) or not all(_size_ok(p, (f["width"], f["height"])) for p, f in zip(planned, found)):
+        if len(found) != len(planned) or not all(size_matches(p, (f["width"], f["height"])) for p, f in zip(planned, found)):
             picture_problems.append({"page": page_no, "expected": planned, "found": [[p["width"], p["height"]] for p in found]})
     for page_no in sorted(added_pages):
         frame = next((t for t in after["tables"] if t.get("depth") == 0 and t.get("page_no") == page_no), None)
@@ -240,7 +236,7 @@ def compare_hwp(before: dict, after: dict, applied: list[dict], copies: list[dic
             missing_values.append({"page": page_no, "expected": change["after"], "found": cell["text"] if cell else None})
         found = [p for p in after["pictures"] if p["container"] == {"table": frame["index"], "row": change["hwp"]["row"], "col": change["hwp"]["col"]}]
         planned = [(p["width_hwpunit"], p["height_hwpunit"]) for p in change["pictures"]]
-        if len(found) != len(planned) or not all(_size_ok(p, (f["width"], f["height"])) for p, f in zip(planned, found)):
+        if len(found) != len(planned) or not all(size_matches(p, (f["width"], f["height"])) for p, f in zip(planned, found)):
             picture_problems.append({"page": page_no, "expected": planned, "found": [[p["width"], p["height"]] for p in found]})
     return {
         "stage": "hwp",

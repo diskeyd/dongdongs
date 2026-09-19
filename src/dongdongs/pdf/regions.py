@@ -11,13 +11,11 @@ from pathlib import Path
 
 import pymupdf
 
+from .tables import rb
+
 HAIRLINE = 1.0
 EDGE = 1.0
 STACK_GAP = 5.0  # pt between a full-width graph and the half-width pair below it
-
-
-def _rb(rect) -> list[float]:
-    return [round(v, 2) for v in rect]
 
 
 def outlines(page: pymupdf.Page, min_width: float, min_height: float) -> list[pymupdf.Rect]:
@@ -80,7 +78,7 @@ def find_regions(page: pymupdf.Page, cfg: dict) -> list[dict]:
             {
                 "page": page.number + 1,
                 "index": index,
-                "bbox": _rb(outline),
+                "bbox": rb(outline),
                 "title": title,
                 "kind": kind,
                 "kind_source": "title" if kind != "unknown" else None,

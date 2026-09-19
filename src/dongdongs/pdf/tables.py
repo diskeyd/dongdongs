@@ -31,7 +31,7 @@ class Cell:
     colspan: int = 1
 
 
-def _rb(rect) -> list[float]:
+def rb(rect) -> list[float]:
     return [round(v, 2) for v in rect]
 
 
@@ -186,7 +186,7 @@ def extract_page(page: pymupdf.Page, known_sections: list[str], pdf_name: str) -
             entry: dict = {
                 "row": r,
                 "cells": [
-                    {"col": c.col, "colspan": c.colspan, "rowspan": c.rowspan, "text": t[0], "markup": t[1], "bbox": _rb(c.rect)}
+                    {"col": c.col, "colspan": c.colspan, "rowspan": c.rowspan, "text": t[0], "markup": t[1], "bbox": rb(c.rect)}
                     for c, t in zip(row_cells, texts)
                 ],
                 "status": "review_required",
@@ -230,7 +230,7 @@ def _union(rects: list[pymupdf.Rect]) -> list[float]:
     total = pymupdf.Rect(rects[0])
     for rect in rects[1:]:
         total |= rect
-    return _rb(total)
+    return rb(total)
 
 
 def pages_with_sections(doc: pymupdf.Document, sections: list[str]) -> list[int]:

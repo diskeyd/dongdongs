@@ -27,12 +27,11 @@ import sys
 from pathlib import Path
 
 from ..job import report_stem, sha256_file
-from .mapping import anchor_page_of, cell_address, hu_to_mm
+from .mapping import anchor_page_of, cell_address, hu_to_mm, size_matches
 
 _ADDRESS = re.compile(r"\b([A-Z]{1,3})(\d{1,4})\b")
 # what a rewritten line must keep looking like (2026-09-17: graph page titles lost their bold)
 CHAR_SHAPE_KEYS = ("Bold", "Italic", "UnderlineType", "UnderlineShape", "UnderlineColor", "Height", "TextColor", "FaceNameHangul", "FaceNameLatin", "FaceNameHanja", "Ratio", "Spacing", "SizeRatio", "Offset", "Emboss", "Engrave", "Outline", "Shadow", "StrikeOut")
-SIZE_TOLERANCE = 0.01  # 1 % of the planned size
 
 
 class EditorError(RuntimeError):
@@ -70,10 +69,6 @@ def _parse(address: str) -> tuple[int, int]:
     for ch in match.group(1):
         col = col * 26 + (ord(ch) - 64)
     return int(match.group(2)) - 1, col - 1
-
-
-def size_matches(expected: tuple[int, int], found: tuple[int, int], tolerance: float = SIZE_TOLERANCE) -> bool:
-    return all(abs(e - f) <= max(1, e * tolerance) for e, f in zip(expected, found))
 
 
 class HwpEditor:

@@ -153,3 +153,10 @@ def test_pdf_test_index_reads_the_list_page_and_the_toc_end(tmp_path):
 def test_a_decimal_number_never_starts_a_section():
     inventory = _report(["25.8kV 개폐기", "1. 외관검사(일반)", "2. 개폐시험(TDx1)"])
     assert [(s["no"], s["page_from"]) for s in report_sections(inventory)[0]] == [(1, 2), (2, 3)]
+
+
+def test_test_list_page_gives_every_test_range(fixture_pdf, keri, expected):
+    index = read_test_index(fixture_pdf, keri.get("sections"))
+    e = expected["pdf_sections"]
+    assert index["found"] and index["index_page"] == e["index_page"] and index["end_page"] == e["end_page"]
+    assert [[t["code"], t["page_from"], t["page_to"]] for t in index["sections"]] == e["tests"]

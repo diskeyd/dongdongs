@@ -204,6 +204,8 @@ GEMINI_API_KEY=여기에_키_붙여넣기
 
 각 회차는 `run.bat`을 새로 실행하면 됩니다(작업 이름은 자동으로 다른 이름이 됩니다). 한 회차가 안 되면 거기서 멈추고 아래대로 보내 주세요.
 
+**회차마다 main zip을 새로 받으세요.** 예전 `dongdongs-main` 폴더는 지우고 새 zip을 풀어 `install.bat`부터 실행합니다. 로그·`report.txt` 첫 줄의 `dongdongs 0.1.0 (6325185 2026-09-28)` 괄호 속 번호가 GitHub의 최신 커밋보다 오래됐으면 옛 코드로 돌린 것입니다.
+
 ### 보내는 방법 — 되든 안 되든 똑같습니다
 
 **① `report.bat` 더블클릭** → `reports` 폴더에 `dongdongs-report-….zip`이 생기고 폴더가 열립니다.

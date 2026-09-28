@@ -74,8 +74,9 @@ def test_apply_order_fills_a_sections_new_pages_before_its_anchor_page_is_retitl
         graph("s2-anchor", 46), graph("s2-add1", 46, 1), graph("s2-page", 23),
     ]
     order = [c["id"] for c in sorted(changes, key=_apply_order)]
-    assert order[:6] == ["s2-page", "s2-add1", "s2-anchor", "s3-add1", "s3-add2", "s3-anchor"]
-    assert set(order[6:]) == {"cell", "circuit"}
+    # later pages first, so edits never shift an anchor that is still to be found
+    assert set(order[:2]) == {"cell", "circuit"}
+    assert order[2:] == ["s3-add1", "s3-add2", "s3-anchor", "s2-add1", "s2-anchor", "s2-page"]
 
 
 def test_hancom_probe_says_windows_only_here():

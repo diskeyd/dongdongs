@@ -93,10 +93,12 @@ class HwpEditor:
             raise EditorError(f"Hancom could not save {path}")
 
     def close(self) -> None:
-        try:
-            self.hwp.Clear(1)
-        finally:
-            self.hwp.Quit()
+        # Hancom can fault while discarding an already saved document; that must not lose the apply log
+        for call in (lambda: self.hwp.Clear(1), self.hwp.Quit):
+            try:
+                call()
+            except Exception:  # noqa: BLE001 - cleanup only, the file is already written
+                pass
 
     def page_count(self) -> int | None:
         try:

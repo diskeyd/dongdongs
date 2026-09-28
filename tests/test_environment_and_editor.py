@@ -26,6 +26,23 @@ def test_editor_refuses_outside_windows():
         HwpEditor()
 
 
+def test_close_survives_hancom_fault_and_still_quits():
+    calls = []
+
+    class FaultyHwp:
+        def Clear(self, option):
+            calls.append("Clear")
+            raise RuntimeError("server fault")
+
+        def Quit(self):
+            calls.append("Quit")
+
+    editor = HwpEditor.__new__(HwpEditor)
+    editor.hwp = FaultyHwp()
+    editor.close()
+    assert calls == ["Clear", "Quit"]
+
+
 def test_result_copies_never_overwrite(tmp_path):
     original = tmp_path / "report.hwp"
     original.write_bytes(b"original bytes")

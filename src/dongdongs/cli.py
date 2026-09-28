@@ -24,7 +24,7 @@ import re
 import sys
 from pathlib import Path
 
-from . import __version__, gemini
+from . import BUILD, __version__, gemini
 from .config import detect_institution, institution, load_config, report_rules, with_defaults
 from .environment import collect
 from .job import Job, create_job, open_job, read_json, write_json
@@ -397,7 +397,7 @@ def cmd_doctor(args) -> int:
 
     status = probe()
     print("=== dongdongs 한글 연결 진단 ===")
-    print(f"dongdongs {__version__} · Python {sys.version.split()[0]} ({status['python_bits']}비트) · {sys.platform}")
+    print(f"dongdongs {__version__} ({BUILD}) · Python {sys.version.split()[0]} ({status['python_bits']}비트) · {sys.platform}")
     print(f"한글 설치: {'예' if status['installed'] else '아니오'}" + (f" ({status['product_name']} {status['version']})" if status["installed"] else ""))
     print(f"COM 등록(64비트 자리): {'있음' if status['progid_64bit'] else '없음'} · (32비트 자리): {'있음' if status['progid_32bit'] else '없음'}")
     if sys.platform == "win32":

@@ -18,7 +18,7 @@ import traceback
 import zipfile
 from pathlib import Path
 
-from . import __version__
+from . import BUILD, __version__
 from .environment import now_kst
 
 ENV_FILE = "dongdongs.env"
@@ -83,7 +83,7 @@ class RunLog:
         stamp = dt.datetime.now().strftime("%Y%m%d-%H%M%S")
         self.path = directory / f"run-{stamp}-{command}.log"
         self._file = self.path.open("a", encoding="utf-8")
-        self._file.write(f"# dongdongs {__version__} · {now_kst()} · {command}\n# argv: {' '.join(_scrub_argv(sys.argv[1:]))}\n")
+        self._file.write(f"# dongdongs {__version__} ({BUILD}) · {now_kst()} · {command}\n# argv: {' '.join(_scrub_argv(sys.argv[1:]))}\n")
         self._streams: list[tuple[str, object]] = []
 
     def start(self) -> None:
@@ -200,7 +200,7 @@ def latest_job(work_root: Path) -> Path | None:
 
 def report_summary(job_root: Path | None, manifest: dict | None, full: bool) -> str:
     lines = [
-        f"dongdongs {__version__}",
+        f"dongdongs {__version__} ({BUILD})",
         f"만든 시각: {now_kst()}",
         f"OS: {platform.system()} {platform.release()} · Python {platform.python_version()}",
         f"포함 범위: {'전체(값 포함) — 공개 이슈에 올리지 말 것' if full else '기본(로그·환경·단계 기록만)'}",

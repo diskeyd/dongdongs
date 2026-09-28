@@ -1,3 +1,6 @@
 # Windows scripts: keep CRLF, never convert them.
 *.bat -text
 *.ps1 -text
+
+# Stamp the commit into downloaded zips so logs show which build ran.
+src/dongdongs/__init__.py export-subst

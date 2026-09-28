@@ -2,7 +2,7 @@ import json
 import os
 import zipfile
 
-from dongdongs.support import build_report_zip, latest_job, load_env_file, parse_env_text, redact_text
+from dongdongs.support import build_report_zip, latest_job, load_env_file, parse_env_text, redact_text, report_summary
 
 
 def test_parse_env_text_handles_quotes_comments_and_blank_values():
@@ -97,3 +97,10 @@ def test_scrub_argv_hides_file_names():
     from dongdongs.support import _scrub_argv
 
     assert _scrub_argv(["init", "--pdf", "C:\\input\\고객사 Draft.PDF", "--hwp", "보고서.hwp", "--job-id", "20260913-1200"]) == ["init", "--pdf", "<file.pdf>", "--hwp", "<file.hwp>", "--job-id", "20260913-1200"]
+
+
+def test_report_summary_names_the_build():
+    from dongdongs import BUILD
+
+    assert BUILD == "dev"  # git checkout: the zip-only placeholder is not filled in
+    assert report_summary(None, None, False).splitlines()[0].endswith("(dev)")

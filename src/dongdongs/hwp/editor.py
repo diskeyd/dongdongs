@@ -123,9 +123,15 @@ class HwpEditor:
     def goto_occurrence(self, text: str, occurrence: int) -> None:
         self._run("Cancel")
         self._run("MoveDocBegin")
+        seen = set()
         for _ in range(occurrence):
             if not self.find_forward(text):
                 raise EditorError(f"occurrence {occurrence} of {text!r} not found")
+            # Hancom may continue from the top after the last hit; landing on a hit already seen is "not found"
+            pos = tuple(self.hwp.GetPos())
+            if pos in seen:
+                raise EditorError(f"occurrence {occurrence} of {text!r} not found")
+            seen.add(pos)
         self._run("Cancel")
 
     def current_address(self) -> str | None:
@@ -287,21 +293,20 @@ class HwpEditor:
         return {"width": width_hu, "height": height_hu, "treat_as_char": treat_as_char}
 
     # graph pages --------------------------------------------------------
-    def copy_current_frame_after_itself(self, copies: int) -> None:
-        """Duplicate the page frame table that holds the caret ``copies`` times right after it."""
-        for _ in range(copies):
-            self._run("Cancel")
-            self._run("TableCellBlock")
-            self._run("TableCellBlockExtend")
-            self._run("TableCellBlockExtend")
-            if not self._run("Copy"):
-                raise EditorError("could not copy the page frame")
-            self._run("Cancel")
-            self._run("CloseEx")  # leave the table
-            self._run("MoveNextParaBegin")
-            if not self._run("Paste"):
-                raise EditorError("could not paste the page frame")
-            self._run("Cancel")
+    def copy_current_frame_after_itself(self) -> None:
+        """Duplicate the page frame table that holds the caret right after it; the caret ends outside any table."""
+        self._run("Cancel")
+        self._run("TableCellBlock")
+        self._run("TableCellBlockExtend")
+        self._run("TableCellBlockExtend")
+        if not self._run("Copy"):
+            raise EditorError("could not copy the page frame")
+        self._run("Cancel")
+        self._run("CloseEx")  # leave the table
+        self._run("MoveNextParaBegin")
+        if not self._run("Paste"):
+            raise EditorError("could not paste the page frame")
+        self._run("Cancel")
 
     def fill_graph_page(self, title_before: str, title_after: str, pictures: list[dict]) -> dict:
         """Rewrite the title line of the current graph-page cell and insert the graphs below it."""
@@ -431,14 +436,20 @@ def apply_changes(original: Path, result_dir: Path, approved: list[dict], visibl
                         if group not in copied:
                             # first new page of this section: make all of the section's approved copies right after its last graph page
                             copied.add(group)  # a failed copy must not paste another batch for the next new page
-                            editor.copy_current_frame_after_itself(to_add[group])
-                            copies.append({"anchor": group, "anchor_page": anchor_page_of(change), "count": to_add[group]})
-                            _goto_anchor(editor, change)
-                        # copies still carry the old title; renamed ones no longer match, so the first hit is the next unfilled copy
-                        editor._run("CloseEx")
-                        if not editor.find_forward(change["anchor"]["text"]):
-                            raise EditorError("copied graph page not found after the anchor")
-                        editor._run("Cancel")
+                            made = 0
+                            try:
+                                # after a paste the caret is outside any table (2026-09-29 round 5), so every copy starts from the anchor again
+                                for _ in range(to_add[group]):
+                                    editor.copy_current_frame_after_itself()
+                                    made += 1
+                                    _goto_anchor(editor, change)
+                                    editor.goto_cell(change["hwp"]["address"])
+                            finally:
+                                # verify shifts later pages by what was really inserted
+                                copies.append({"anchor": group, "anchor_page": anchor_page_of(change), "count": made})
+                        # copies sit right after the anchor and still carry its title; filled ones no longer match,
+                        # so the next unfilled copy is the hit right after the anchor
+                        editor.goto_occurrence(change["anchor"]["text"], change["anchor"]["occurrence"] + 1)
                         editor.goto_cell(change["hwp"]["address"])
                         added_pages.add(change["hwp"].get("page_no_after") or change["hwp"]["page_no"])
                     pictures = []

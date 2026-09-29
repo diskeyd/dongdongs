@@ -43,6 +43,21 @@ def test_close_survives_hancom_fault_and_still_quits():
     assert calls == ["Clear", "Quit"]
 
 
+def test_goto_occurrence_treats_a_search_that_wraps_to_the_top_as_not_found():
+    # only the anchor carries the title; a second find that comes back to it must not count as its copy
+    class OneHit:
+        def GetPos(self):
+            return (3, 0, 5)
+
+    editor = HwpEditor.__new__(HwpEditor)
+    editor.hwp = OneHit()
+    editor._run = lambda action: True
+    editor.find_forward = lambda text: True
+    editor.goto_occurrence("title", 1)
+    with pytest.raises(EditorError, match="not found"):
+        editor.goto_occurrence("title", 2)
+
+
 def test_result_copies_never_overwrite(tmp_path):
     original = tmp_path / "report.hwp"
     original.write_bytes(b"original bytes")
